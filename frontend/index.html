@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UK Telco Intel</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f5f7fa;
+      color: #1a1a2e;
+      padding: 2rem;
+    }
+    h1 { margin-bottom: 1.5rem; }
+    #status {
+      font-size: 0.85rem;
+      color: #666;
+      margin-bottom: 1rem;
+    }
+    #updates-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .update-card {
+      background: #fff;
+      border-left: 4px solid #4361ee;
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .update-source {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #4361ee;
+      margin-bottom: 0.25rem;
+    }
+    .update-headline {
+      font-size: 1rem;
+      font-weight: 500;
+    }
+    .update-time {
+      font-size: 0.8rem;
+      color: #888;
+      margin-top: 0.35rem;
+    }
+    .error { color: #e63946; }
+  </style>
+</head>
+<body>
+  <h1>UK Telco Intelligence</h1>
+  <p id="status">Loading updates&hellip;</p>
+  <ul id="updates-list"></ul>
+
+  <script>
+    const API_BASE = window.location.hostname === "" || window.location.protocol === "file:"
+      ? "http://localhost:8000"
+      : "";
+
+    async function fetchUpdates() {
+      const statusEl = document.getElementById("status");
+      const listEl = document.getElementById("updates-list");
+
+      try {
+        const res = await fetch(`${API_BASE}/api/updates`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        listEl.innerHTML = "";
+        data.updates.forEach(u => {
+          const li = document.createElement("li");
+          li.className = "update-card";
+          li.innerHTML = `
+            <div class="update-source">${u.source}</div>
+            <div class="update-headline">${u.headline}</div>
+            <div class="update-time">${new Date(u.timestamp).toLocaleString()}</div>
+          `;
+          listEl.appendChild(li);
+        });
+
+        statusEl.textContent = `${data.updates.length} updates loaded`;
+      } catch (err) {
+        statusEl.textContent = `Error: ${err.message}`;
+        statusEl.classList.add("error");
+      }
+    }
+
+    fetchUpdates();
+    // Poll every 30 seconds
+    setInterval(fetchUpdates, 30000);
+  </script>
+</body>
+</html>
