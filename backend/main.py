@@ -1,10 +1,43 @@
-"""UK Telco Intelligence Platform – API skeleton."""
+"""UK Telco Intelligence Platform – FastAPI application."""
 
-from datetime import datetime, timezone
-from fastapi import FastAPI
+from __future__ import annotations
+
+import logging
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
+from fastapi import FastAPI, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
-app = FastAPI(title="UK Telco Intel", version="0.1.0")
+from database import init_db, get_db
+from models import Update
+from schemas import UpdateOut
+from ingestion.scheduler import start_scheduler, stop_scheduler, run_all_once
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+
+# ── Lifespan ────────────────────────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    logger.info("Database initialised.")
+    # Run all ingestors once on startup so the DB isn't empty
+    run_all_once()
+    start_scheduler()
+    yield
+    stop_scheduler()
+    logger.info("Scheduler stopped.")
+
+
+app = FastAPI(title="UK Telco Intel", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -13,49 +46,49 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Dummy updates – will be replaced by real ingestion later
-DUMMY_UPDATES = [
-    {
-        "id": 1,
-        "source": "Ofcom",
-        "headline": "Ofcom publishes latest Connected Nations report",
-        "timestamp": "2025-06-01T09:00:00Z",
-    },
-    {
-        "id": 2,
-        "source": "BT Group",
-        "headline": "BT announces FTTP rollout milestone – 15m premises passed",
-        "timestamp": "2025-05-28T14:30:00Z",
-    },
-    {
-        "id": 3,
-        "source": "Vodafone UK",
-        "headline": "Vodafone UK completes 5G SA core upgrade",
-        "timestamp": "2025-05-25T11:00:00Z",
-    },
-    {
-        "id": 4,
-        "source": "Three UK",
-        "headline": "Three UK merger update: CMA phase-2 review ongoing",
-        "timestamp": "2025-05-20T16:45:00Z",
-    },
-    {
-        "id": 5,
-        "source": "Virgin Media O2",
-        "headline": "VMO2 expands fixed-wireless broadband trial",
-        "timestamp": "2025-05-18T08:15:00Z",
-    },
-]
 
+# ── Endpoints ───────────────────────────────────────────────────────────────
 
 @app.get("/api/health")
-def health():
+def health(db: Session = Depends(get_db)):
+    """Health check – also reports DB row count."""
+    count = db.query(func.count(Update.id)).scalar()
     return {
         "status": "ok",
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "db_updates_count": count,
     }
 
 
-@app.get("/api/updates")
-def get_updates():
-    return {"updates": DUMMY_UPDATES}
+@app.get("/api/updates", response_model=list[UpdateOut])
+def get_updates(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    source_type: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Return updates from the database, newest first."""
+    q = db.query(Update)
+    if source_type:
+        q = q.filter(Update.source_type == source_type)
+    if search:
+        pattern = f"%{search}%"
+        q = q.filter(
+            (Update.title.ilike(pattern)) | (Update.summary.ilike(pattern))
+        )
+    rows = q.order_by(Update.created_at.desc()).offset(offset).limit(limit).all()
+    return rows
+
+
+@app.get("/api/updates/recent_summary")
+def recent_summary(db: Session = Depends(get_db)):
+    """Count of updates by source_type in the last 24 hours."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    rows = (
+        db.query(Update.source_type, func.count(Update.id))
+        .filter(Update.created_at >= cutoff)
+        .group_by(Update.source_type)
+        .all()
+    )
+    return {stype: count for stype, count in rows}

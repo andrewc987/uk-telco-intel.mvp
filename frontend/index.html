@@ -3,94 +3,153 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>UK Telco Intel</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: #f5f7fa;
-      color: #1a1a2e;
-      padding: 2rem;
-    }
-    h1 { margin-bottom: 1.5rem; }
-    #status {
-      font-size: 0.85rem;
-      color: #666;
-      margin-bottom: 1rem;
-    }
-    #updates-list {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-    .update-card {
-      background: #fff;
-      border-left: 4px solid #4361ee;
-      border-radius: 6px;
-      padding: 1rem 1.25rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    }
-    .update-source {
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #4361ee;
-      margin-bottom: 0.25rem;
-    }
-    .update-headline {
-      font-size: 1rem;
-      font-weight: 500;
-    }
-    .update-time {
-      font-size: 0.8rem;
-      color: #888;
-      margin-top: 0.35rem;
-    }
-    .error { color: #e63946; }
-  </style>
+  <title>UK TELCO INTEL</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <h1>UK Telco Intelligence</h1>
-  <p id="status">Loading updates&hellip;</p>
-  <ul id="updates-list"></ul>
+
+  <!-- Header -->
+  <div class="header">
+    <h1>UK Telco Intelligence</h1>
+    <div class="meta">
+      <span class="live-dot"></span>
+      <span id="status">CONNECTING...</span>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters">
+    <button class="filter-btn active" data-type="">ALL</button>
+    <button class="filter-btn" data-type="policy">POLICY</button>
+    <button class="filter-btn" data-type="regulation">REGULATION</button>
+    <button class="filter-btn" data-type="trade_press">TRADE</button>
+    <button class="filter-btn" data-type="news">NEWS</button>
+    <button class="filter-btn" data-type="forum">FORUM</button>
+    <button class="filter-btn" data-type="incident">INCIDENT</button>
+    <button class="filter-btn" data-type="curated">CURATED</button>
+    <input class="search-input" type="text" id="search" placeholder="> search..." />
+  </div>
+
+  <!-- Feed -->
+  <div class="feed" id="feed"></div>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <span id="count-info">--</span>
+    <span id="refresh-info">--</span>
+  </div>
 
   <script>
-    const API_BASE = window.location.hostname === "" || window.location.protocol === "file:"
-      ? "http://localhost:8000"
-      : "";
+    const API_BASE = window.location.hostname === '' || window.location.protocol === 'file:'
+      ? 'http://localhost:8000'
+      : '';
 
+    let allUpdates = [];
+    let activeType = '';
+    let searchTerm = '';
+
+    // ── Helpers ────────────────────────────────────────────────────
+    function relativeTime(iso) {
+      const diff = Date.now() - new Date(iso).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) return 'just now';
+      if (mins < 60) return mins + 'm ago';
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return hrs + 'h ago';
+      const days = Math.floor(hrs / 24);
+      return days + 'd ago';
+    }
+
+    function escapeHtml(str) {
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    // ── Render ─────────────────────────────────────────────────────
+    function renderFeed() {
+      const feed = document.getElementById('feed');
+      const lowerSearch = searchTerm.toLowerCase();
+
+      const filtered = allUpdates.filter(u => {
+        if (activeType && u.source_type !== activeType) return false;
+        if (lowerSearch) {
+          const haystack = (u.title + ' ' + u.summary).toLowerCase();
+          if (!haystack.includes(lowerSearch)) return false;
+        }
+        return true;
+      });
+
+      document.getElementById('count-info').textContent =
+        filtered.length + ' / ' + allUpdates.length + ' updates';
+
+      if (filtered.length === 0) {
+        feed.innerHTML = '<div style="color:var(--fg-dim);padding:2rem;">No matching updates.</div>';
+        return;
+      }
+
+      let html = '';
+      for (const u of filtered) {
+        const badgeClass = 'badge badge-' + u.source_type;
+        const titleHtml = u.link_url
+          ? '<a href="' + escapeHtml(u.link_url) + '" target="_blank" rel="noopener">' + escapeHtml(u.title) + '</a>'
+          : escapeHtml(u.title);
+        const tags = u.tags
+          ? u.tags.split(',').map(function(t){ return t.trim(); }).filter(Boolean).map(function(t){
+              return '<span class="tag-pill">' + escapeHtml(t) + '</span>';
+            }).join('')
+          : '';
+
+        html += '<div class="card">'
+          + '<div class="card-top">'
+          +   '<span class="' + badgeClass + '">' + escapeHtml(u.source_type) + '</span>'
+          +   '<span class="source-name">' + escapeHtml(u.source_name) + '</span>'
+          +   '<span class="timestamp">' + relativeTime(u.created_at) + '</span>'
+          + '</div>'
+          + '<div class="card-title">' + titleHtml + '</div>'
+          + (u.summary ? '<div class="card-summary">' + escapeHtml(u.summary) + '</div>' : '')
+          + (tags ? '<div class="card-tags">' + tags + '</div>' : '')
+          + '</div>';
+      }
+      feed.innerHTML = html;
+    }
+
+    // ── Fetch ──────────────────────────────────────────────────────
     async function fetchUpdates() {
-      const statusEl = document.getElementById("status");
-      const listEl = document.getElementById("updates-list");
-
+      var statusEl = document.getElementById('status');
+      var refreshEl = document.getElementById('refresh-info');
       try {
-        const res = await fetch(`${API_BASE}/api/updates`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-
-        listEl.innerHTML = "";
-        data.updates.forEach(u => {
-          const li = document.createElement("li");
-          li.className = "update-card";
-          li.innerHTML = `
-            <div class="update-source">${u.source}</div>
-            <div class="update-headline">${u.headline}</div>
-            <div class="update-time">${new Date(u.timestamp).toLocaleString()}</div>
-          `;
-          listEl.appendChild(li);
-        });
-
-        statusEl.textContent = `${data.updates.length} updates loaded`;
+        var res = await fetch(API_BASE + '/api/updates?limit=100');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var data = await res.json();
+        allUpdates = data;
+        renderFeed();
+        var now = new Date().toLocaleTimeString();
+        statusEl.textContent = 'LIVE';
+        refreshEl.textContent = 'last refresh ' + now;
       } catch (err) {
-        statusEl.textContent = `Error: ${err.message}`;
-        statusEl.classList.add("error");
+        statusEl.textContent = 'ERROR: ' + err.message;
       }
     }
 
+    // ── Filter buttons ─────────────────────────────────────────────
+    document.querySelectorAll('.filter-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.filter-btn').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+        activeType = btn.dataset.type;
+        renderFeed();
+      });
+    });
+
+    document.getElementById('search').addEventListener('input', function(e) {
+      searchTerm = e.target.value;
+      renderFeed();
+    });
+
+    // ── Boot ───────────────────────────────────────────────────────
     fetchUpdates();
-    // Poll every 30 seconds
-    setInterval(fetchUpdates, 30000);
+    setInterval(fetchUpdates, 60000);
   </script>
 </body>
 </html>
