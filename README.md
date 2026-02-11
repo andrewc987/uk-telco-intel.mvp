@@ -6,12 +6,15 @@ A rolling intelligence board for the UK telecommunications sector. Aggregates po
 
 ```
 backend/
-  main.py              FastAPI application (API + lifespan/scheduler wiring)
+  main.py              FastAPI application (API + frontend serving + scheduler)
   config.py            Constants and environment variable configuration
   database.py          SQLAlchemy engine, session factory, Base
   models.py            Update ORM model (SQLite)
   schemas.py           Pydantic request/response schemas
   requirements.txt     Python dependencies
+  static/
+    index.html         MI5-style intelligence terminal UI (served at /)
+    styles.css         Dark-theme stylesheet (served at /static/styles.css)
   ingestion/
     __init__.py
     base.py            Abstract ingestor + dedup/persist helpers
@@ -25,14 +28,26 @@ backend/
     env_agency.py      Environment Agency flood warnings (incident)
     scheduler.py       APScheduler job definitions
 
-frontend/
-  index.html           Single-page intelligence terminal UI
-  styles.css           MI5 dark-theme stylesheet
+frontend/              (legacy – kept for reference; backend/static/ is canonical)
+  index.html
+  styles.css
+
+.replit                Replit run configuration
 ```
 
 ## Quick start
 
-### 1. Backend
+Everything runs as a **single FastAPI server** — one command, one port.
+
+### One-command run (Replit or local)
+
+```bash
+cd backend && pip install -r requirements.txt && uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+On Replit this is already configured in `.replit` — just press **Run**.
+
+### Local development with venv
 
 ```bash
 cd backend
@@ -47,18 +62,9 @@ On first startup the app will:
 2. Run every ingestor once to populate the database
 3. Start the background scheduler for recurring ingestion
 
-The API is at **http://localhost:8000**.
-
-### 2. Frontend
-
-Open `frontend/index.html` directly in a browser, or serve it:
-
-```bash
-cd frontend
-python -m http.server 3000
-```
-
-Then visit **http://localhost:3000**. The page auto-detects `file://` vs hosted mode and calls the backend accordingly.
+Then visit **http://localhost:8000**:
+- `/` serves the MI5-style dashboard
+- `/api/*` provides JSON endpoints
 
 ## API endpoints
 

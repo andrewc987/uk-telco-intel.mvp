@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import logging
+import pathlib
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import FastAPI, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+
+STATIC_DIR = pathlib.Path(__file__).resolve().parent / "static"
 
 from database import init_db, get_db
 from models import Update
@@ -92,3 +97,14 @@ def recent_summary(db: Session = Depends(get_db)):
         .all()
     )
     return {stype: count for stype, count in rows}
+
+
+# ── Frontend serving ────────────────────────────────────────────────────────
+
+@app.get("/", include_in_schema=False)
+def serve_index():
+    """Serve the MI5-style dashboard at the root URL."""
+    return FileResponse(STATIC_DIR / "index.html")
+
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
