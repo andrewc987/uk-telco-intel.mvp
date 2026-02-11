@@ -1,4 +1,4 @@
-"""Ofcom ingestor – news releases and consultations via multiple feed sources."""
+"""DSIT (Department for Science, Innovation and Technology) ingestor – GOV.UK Atom feeds."""
 
 from __future__ import annotations
 
@@ -13,34 +13,35 @@ from ingestion.base import BaseIngestor
 
 logger = logging.getLogger(__name__)
 
-OFCOM_FEEDS = [
-    {
-        "url": "https://www.govwire.co.uk/rss/ofcom",
-        "label": "news",
-    },
+# DSIT news releases and consultations via GOV.UK Atom feeds
+DSIT_FEEDS = [
     {
         "url": (
             "https://www.gov.uk/search/news-and-communications.atom"
-            "?organisations%5B%5D=ofcom"
+            "?organisations%5B%5D=department-for-science-innovation-and-technology"
         ),
         "label": "news",
+        "source_type": "policy",
     },
     {
-        "url": "https://openrss.org/www.ofcom.org.uk/consultations-and-statements",
+        "url": (
+            "https://www.gov.uk/search/policy-papers-and-consultations.atom"
+            "?organisations%5B%5D=department-for-science-innovation-and-technology"
+        ),
         "label": "consultations",
+        "source_type": "policy",
     },
 ]
 
 
-class OfcomIngestor(BaseIngestor):
-    source_name = "Ofcom"
+class DSITIngestor(BaseIngestor):
+    source_name = "DSIT"
 
     def fetch(self) -> list[UpdateCreate]:
         items: list[UpdateCreate] = []
-        seen_titles: set[str] = set()
-
-        for feed_info in OFCOM_FEEDS:
+        for feed_info in DSIT_FEEDS:
             feed_url = feed_info["url"]
+            source_type = feed_info["source_type"]
             label = feed_info["label"]
             try:
                 resp = requests.get(feed_url, timeout=15, headers={
@@ -52,30 +53,23 @@ class OfcomIngestor(BaseIngestor):
                     title = entry.get("title", "").strip()
                     if not title:
                         continue
-                    # Deduplicate across feeds by title
-                    title_key = title.lower()
-                    if title_key in seen_titles:
-                        continue
-                    seen_titles.add(title_key)
-
                     link = entry.get("link", "")
                     summary = entry.get("summary", entry.get("description", ""))
                     if summary:
                         summary = summary[:500]
                     items.append(UpdateCreate(
-                        source_type="regulation",
+                        source_type=source_type,
                         source_name=self.source_name,
                         title=title,
                         summary=summary or "",
                         link_url=link or None,
-                        tags=f"Ofcom,{label}",
+                        tags=f"DSIT,{label}",
                         importance_score=0.7,
                         raw_meta=json.dumps({
-                            "feed": feed_url,
-                            "label": label,
+                            "feed": label,
                             "published": entry.get("published", entry.get("updated", "")),
                         }),
                     ))
             except Exception as exc:
-                logger.warning("Ofcom feed error (%s): %s", feed_url, exc)
+                logger.warning("DSIT feed error (%s): %s", label, exc)
         return items

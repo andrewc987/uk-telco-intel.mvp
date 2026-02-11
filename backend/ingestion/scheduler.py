@@ -13,14 +13,15 @@ from database import SessionLocal
 from models import Update
 from ingestion.base import persist_updates
 
-from ingestion.govuk import GovUKIngestor
-from ingestion.ofcom_rss import OfcomRSSIngestor
+from ingestion.virgin_media_o2 import VirginMediaO2Ingestor
+from ingestion.vodafone_three import VodafoneThreeIngestor
+from ingestion.sky import SkyIngestor
+from ingestion.talktalk import TalkTalkIngestor
+from ingestion.dsit import DSITIngestor
+from ingestion.ofcom_rss import OfcomIngestor
+from ingestion.googlenews import GoogleNewsIngestor
 from ingestion.thinkbroadband import ThinkBroadbandIngestor
 from ingestion.ispreview import ISPReviewIngestor
-from ingestion.googlenews import GoogleNewsIngestor
-from ingestion.reddit_stub import RedditStubIngestor
-from ingestion.metoffice import MetOfficeIngestor
-from ingestion.env_agency import EnvAgencyIngestor
 
 logger = logging.getLogger(__name__)
 
@@ -91,21 +92,41 @@ def _run_daily_summary():
 def start_scheduler():
     """Register all jobs and start the scheduler."""
 
-    # Every 10 minutes
+    # Operator news centres – every 15 minutes
+    scheduler.add_job(
+        _run_ingestor, IntervalTrigger(minutes=15),
+        args=[VirginMediaO2Ingestor], id="vmo2", replace_existing=True,
+    )
+    scheduler.add_job(
+        _run_ingestor, IntervalTrigger(minutes=15),
+        args=[VodafoneThreeIngestor], id="vodafone_three", replace_existing=True,
+    )
+    scheduler.add_job(
+        _run_ingestor, IntervalTrigger(minutes=15),
+        args=[SkyIngestor], id="sky", replace_existing=True,
+    )
+    scheduler.add_job(
+        _run_ingestor, IntervalTrigger(minutes=15),
+        args=[TalkTalkIngestor], id="talktalk", replace_existing=True,
+    )
+
+    # Government & regulator – every 10 minutes
     scheduler.add_job(
         _run_ingestor, IntervalTrigger(minutes=10),
-        args=[GovUKIngestor], id="govuk", replace_existing=True,
+        args=[DSITIngestor], id="dsit", replace_existing=True,
     )
     scheduler.add_job(
         _run_ingestor, IntervalTrigger(minutes=10),
-        args=[OfcomRSSIngestor], id="ofcom_rss", replace_existing=True,
+        args=[OfcomIngestor], id="ofcom", replace_existing=True,
     )
+
+    # Google News – every 10 minutes
     scheduler.add_job(
         _run_ingestor, IntervalTrigger(minutes=10),
         args=[GoogleNewsIngestor], id="googlenews", replace_existing=True,
     )
 
-    # Every 15 minutes
+    # Trade press – every 15 minutes
     scheduler.add_job(
         _run_ingestor, IntervalTrigger(minutes=15),
         args=[ThinkBroadbandIngestor], id="thinkbroadband", replace_existing=True,
@@ -113,20 +134,6 @@ def start_scheduler():
     scheduler.add_job(
         _run_ingestor, IntervalTrigger(minutes=15),
         args=[ISPReviewIngestor], id="ispreview", replace_existing=True,
-    )
-    scheduler.add_job(
-        _run_ingestor, IntervalTrigger(minutes=15),
-        args=[RedditStubIngestor], id="reddit", replace_existing=True,
-    )
-
-    # Every 30 minutes
-    scheduler.add_job(
-        _run_ingestor, IntervalTrigger(minutes=30),
-        args=[MetOfficeIngestor], id="metoffice", replace_existing=True,
-    )
-    scheduler.add_job(
-        _run_ingestor, IntervalTrigger(minutes=30),
-        args=[EnvAgencyIngestor], id="env_agency", replace_existing=True,
     )
 
     # Daily at 06:00 UTC
@@ -147,8 +154,8 @@ def stop_scheduler():
 def run_all_once():
     """Trigger every ingestor once (useful on first startup)."""
     for cls in [
-        GovUKIngestor, OfcomRSSIngestor, ThinkBroadbandIngestor,
-        ISPReviewIngestor, GoogleNewsIngestor, RedditStubIngestor,
-        MetOfficeIngestor, EnvAgencyIngestor,
+        VirginMediaO2Ingestor, VodafoneThreeIngestor, SkyIngestor,
+        TalkTalkIngestor, DSITIngestor, OfcomIngestor,
+        GoogleNewsIngestor, ThinkBroadbandIngestor, ISPReviewIngestor,
     ]:
         _run_ingestor(cls)

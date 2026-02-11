@@ -169,12 +169,11 @@ body::after {
   border: 1px solid;
 }
 
+.badge-operator    { color: #c792ea;      border-color: #c792ea; }
 .badge-policy      { color: var(--cyan);   border-color: var(--cyan); }
 .badge-regulation  { color: var(--amber);  border-color: var(--amber); }
-.badge-trade_press { color: var(--fg);     border-color: var(--fg); }
 .badge-news        { color: var(--fg-bright); border-color: var(--fg-bright); }
-.badge-forum       { color: #c792ea;      border-color: #c792ea; }
-.badge-incident    { color: var(--red);    border-color: var(--red); }
+.badge-trade_press { color: var(--fg);     border-color: var(--fg); }
 .badge-curated     { color: var(--accent); border-color: var(--accent); }
 
 .source-name {
