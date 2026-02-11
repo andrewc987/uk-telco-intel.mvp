@@ -1,32 +1,42 @@
-"""Met Office severe weather warnings ingestor."""
+"""Vodafone Three News Centre ingestor – operator news via WordPress RSS."""
 
 from __future__ import annotations
 
 import json
 import logging
 
+import feedparser
 import requests
 
+from config import TELCO_TAG_KEYWORDS
 from schemas import UpdateCreate
 from ingestion.base import BaseIngestor
 
 logger = logging.getLogger(__name__)
 
-WARNINGS_URL = "https://www.metoffice.gov.uk/public/data/PWSCache/WarningsRSS/Region/UK"
+FEED_URL = "https://www.vodafone.co.uk/newscentre/feed/"
 
 
-class MetOfficeIngestor(BaseIngestor):
-    source_name = "MetOffice"
+def _extract_tags(text: str) -> str:
+    lower = text.lower()
+    found = [kw for kw in TELCO_TAG_KEYWORDS if kw.lower() in lower]
+    if not any(kw in found for kw in ("Vodafone", "Three")):
+        found.insert(0, "Vodafone")
+    return ",".join(found)
+
+
+class VodafoneThreeIngestor(BaseIngestor):
+    source_name = "Vodafone Three"
 
     def fetch(self) -> list[UpdateCreate]:
-        import feedparser
-
         items: list[UpdateCreate] = []
         try:
-            resp = requests.get(WARNINGS_URL, timeout=15)
+            resp = requests.get(FEED_URL, timeout=15, headers={
+                "User-Agent": "uk-telco-intel/0.1",
+            })
             resp.raise_for_status()
             feed = feedparser.parse(resp.content)
-            for entry in feed.entries[:20]:
+            for entry in feed.entries[:25]:
                 title = entry.get("title", "").strip()
                 if not title:
                     continue
@@ -34,18 +44,19 @@ class MetOfficeIngestor(BaseIngestor):
                 summary = entry.get("summary", entry.get("description", ""))
                 if summary:
                     summary = summary[:500]
+                tags = _extract_tags(title + " " + (summary or ""))
                 items.append(UpdateCreate(
-                    source_type="incident",
+                    source_type="operator",
                     source_name=self.source_name,
                     title=title,
                     summary=summary or "",
                     link_url=link or None,
-                    tags="weather,risk",
+                    tags=tags,
                     importance_score=0.7,
                     raw_meta=json.dumps({
                         "published": entry.get("published", ""),
                     }),
                 ))
         except Exception as exc:
-            logger.warning("MetOffice fetch error: %s", exc)
+            logger.warning("Vodafone Three fetch error: %s", exc)
         return items
