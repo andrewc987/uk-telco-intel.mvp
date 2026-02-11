@@ -1,21 +1,23 @@
-"""Sky News Centre ingestor – operator news via web scraping (no RSS available)."""
+"""Sky ingestor – operator news via Google News RSS (Sky site is JS-rendered)."""
 
 from __future__ import annotations
 
 import json
 import logging
 
-import requests
-from bs4 import BeautifulSoup
-
 from config import TELCO_TAG_KEYWORDS
 from schemas import UpdateCreate
-from ingestion.base import BaseIngestor
+from ingestion.base import BaseIngestor, curl_fetch, parse_rss
 
 logger = logging.getLogger(__name__)
 
-NEWSROOM_URL = "https://www.skygroup.sky/press/newsroom"
-BASE_URL = "https://www.skygroup.sky"
+# Sky's press site is fully JS-rendered (Next.js), so we use Google News
+# with a targeted query to get Sky UK corporate/telecoms news.
+FEED_URL = (
+    "https://news.google.com/rss/search?"
+    "q=%22Sky%22+UK+telecoms+OR+broadband+OR+%22Sky+Glass%22+OR+%22Sky+Broadband%22"
+    "&hl=en-GB&gl=GB&ceid=GB:en"
+)
 
 
 def _extract_tags(text: str) -> str:
@@ -32,44 +34,20 @@ class SkyIngestor(BaseIngestor):
     def fetch(self) -> list[UpdateCreate]:
         items: list[UpdateCreate] = []
         try:
-            resp = requests.get(NEWSROOM_URL, timeout=20, headers={
-                "User-Agent": "Mozilla/5.0 (compatible; uk-telco-intel/0.1)",
-            })
-            resp.raise_for_status()
-            soup = BeautifulSoup(resp.text, "html.parser")
-
-            # Sky newsroom typically lists articles as links within article/card elements
-            seen_urls: set[str] = set()
-            for link in soup.find_all("a", href=True):
-                href = link["href"]
-                # Filter for article-like paths
-                if "/article/" not in href and "/press-release/" not in href:
-                    continue
-                if not href.startswith("http"):
-                    href = BASE_URL + href
-                if href in seen_urls:
-                    continue
-                seen_urls.add(href)
-
-                title = link.get_text(strip=True)
-                if not title or len(title) < 10:
-                    continue
-
-                tags = _extract_tags(title)
+            data = curl_fetch(FEED_URL)
+            for entry in parse_rss(data, max_items=20):
+                title = entry["title"]
+                tags = _extract_tags(title + " " + entry["summary"])
                 items.append(UpdateCreate(
                     source_type="operator",
                     source_name=self.source_name,
                     title=title,
-                    summary="",
-                    link_url=href,
+                    summary=entry["summary"],
+                    link_url=entry["link"] or None,
                     tags=tags,
                     importance_score=0.6,
-                    raw_meta=json.dumps({"page": NEWSROOM_URL}),
+                    raw_meta=json.dumps({"published": entry["published"]}),
                 ))
-
-                if len(items) >= 25:
-                    break
-
         except Exception as exc:
-            logger.warning("Sky newsroom fetch error: %s", exc)
+            logger.warning("Sky fetch error: %s", exc)
         return items

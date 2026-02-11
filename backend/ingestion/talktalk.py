@@ -1,16 +1,13 @@
-"""TalkTalk News Centre ingestor – operator news via web scraping (no RSS available)."""
+"""TalkTalk News Centre ingestor – operator news via web scraping."""
 
 from __future__ import annotations
 
 import json
 import logging
 
-import requests
-from bs4 import BeautifulSoup
-
 from config import TELCO_TAG_KEYWORDS
 from schemas import UpdateCreate
-from ingestion.base import BaseIngestor
+from ingestion.base import BaseIngestor, curl_fetch, extract_links
 
 logger = logging.getLogger(__name__)
 
@@ -32,20 +29,13 @@ class TalkTalkIngestor(BaseIngestor):
     def fetch(self) -> list[UpdateCreate]:
         items: list[UpdateCreate] = []
         try:
-            resp = requests.get(NEWSROOM_URL, timeout=20, headers={
-                "User-Agent": "Mozilla/5.0 (compatible; uk-telco-intel/0.1)",
-            })
-            resp.raise_for_status()
-            soup = BeautifulSoup(resp.text, "html.parser")
+            html = curl_fetch(NEWSROOM_URL)
+            links = extract_links(html)
 
-            # TalkTalk newsroom lists articles as links within the newsroom page
             seen_urls: set[str] = set()
-            for link in soup.find_all("a", href=True):
-                href = link["href"]
-                # Filter for newsroom article paths
+            for href, text in links:
                 if "/newsroom/" not in href:
                     continue
-                # Skip the newsroom index itself
                 if href.rstrip("/").endswith("/newsroom"):
                     continue
                 if not href.startswith("http"):
@@ -54,7 +44,7 @@ class TalkTalkIngestor(BaseIngestor):
                     continue
                 seen_urls.add(href)
 
-                title = link.get_text(strip=True)
+                title = text.strip()
                 if not title or len(title) < 10:
                     continue
 

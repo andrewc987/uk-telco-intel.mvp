@@ -5,12 +5,9 @@ from __future__ import annotations
 import json
 import logging
 
-import feedparser
-import requests
-
 from config import TELCO_TAG_KEYWORDS
 from schemas import UpdateCreate
-from ingestion.base import BaseIngestor
+from ingestion.base import BaseIngestor, curl_fetch, parse_rss
 
 logger = logging.getLogger(__name__)
 
@@ -29,29 +26,19 @@ class ThinkBroadbandIngestor(BaseIngestor):
     def fetch(self) -> list[UpdateCreate]:
         items: list[UpdateCreate] = []
         try:
-            resp = requests.get(FEED_URL, timeout=15)
-            resp.raise_for_status()
-            feed = feedparser.parse(resp.content)
-            for entry in feed.entries[:25]:
-                title = entry.get("title", "").strip()
-                if not title:
-                    continue
-                link = entry.get("link", "")
-                summary = entry.get("summary", entry.get("description", ""))
-                if summary:
-                    summary = summary[:500]
-                tags = _extract_tags(title + " " + (summary or ""))
+            data = curl_fetch(FEED_URL)
+            for entry in parse_rss(data, max_items=25):
+                title = entry["title"]
+                tags = _extract_tags(title + " " + entry["summary"])
                 items.append(UpdateCreate(
                     source_type="trade_press",
                     source_name=self.source_name,
                     title=title,
-                    summary=summary or "",
-                    link_url=link or None,
+                    summary=entry["summary"],
+                    link_url=entry["link"] or None,
                     tags=tags,
                     importance_score=0.5,
-                    raw_meta=json.dumps({
-                        "published": entry.get("published", ""),
-                    }),
+                    raw_meta=json.dumps({"published": entry["published"]}),
                 ))
         except Exception as exc:
             logger.warning("ThinkBroadband fetch error: %s", exc)

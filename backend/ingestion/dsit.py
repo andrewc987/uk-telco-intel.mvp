@@ -5,11 +5,8 @@ from __future__ import annotations
 import json
 import logging
 
-import feedparser
-import requests
-
 from schemas import UpdateCreate
-from ingestion.base import BaseIngestor
+from ingestion.base import BaseIngestor, curl_fetch, parse_rss
 
 logger = logging.getLogger(__name__)
 
@@ -44,30 +41,20 @@ class DSITIngestor(BaseIngestor):
             source_type = feed_info["source_type"]
             label = feed_info["label"]
             try:
-                resp = requests.get(feed_url, timeout=15, headers={
-                    "User-Agent": "uk-telco-intel/0.1",
-                })
-                resp.raise_for_status()
-                feed = feedparser.parse(resp.content)
-                for entry in feed.entries[:20]:
-                    title = entry.get("title", "").strip()
-                    if not title:
-                        continue
-                    link = entry.get("link", "")
-                    summary = entry.get("summary", entry.get("description", ""))
-                    if summary:
-                        summary = summary[:500]
+                data = curl_fetch(feed_url)
+                for entry in parse_rss(data, max_items=20):
+                    title = entry["title"]
                     items.append(UpdateCreate(
                         source_type=source_type,
                         source_name=self.source_name,
                         title=title,
-                        summary=summary or "",
-                        link_url=link or None,
+                        summary=entry["summary"],
+                        link_url=entry["link"] or None,
                         tags=f"DSIT,{label}",
                         importance_score=0.7,
                         raw_meta=json.dumps({
                             "feed": label,
-                            "published": entry.get("published", entry.get("updated", "")),
+                            "published": entry["published"],
                         }),
                     ))
             except Exception as exc:
