@@ -10,32 +10,30 @@ interface JourneyCardProps {
 export default function JourneyCard({ journey, index }: JourneyCardProps) {
   return (
     <div
-      className="animate-fade-up bg-surface border border-border p-4"
-      style={{ animationDelay: `${200 + index * 200}ms` }}
+      className="animate-fade-up bg-surface rounded-2xl shadow-card p-5"
+      style={{ animationDelay: `${200 + index * 150}ms` }}
     >
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-text-primary">
-          {journey.personName}
-        </span>
-        <span className="text-sm text-accent font-medium">
-          {journey.journeyToVenue} min
-        </span>
-      </div>
-
-      <p className="text-xs text-text-secondary mb-2">
-        {journey.route}
+      {/* Narrative first */}
+      <p className="text-sm text-text-primary leading-relaxed mb-3">
+        {journey.narrative}
       </p>
 
-      {journey.journeyHome > 0 && (
-        <p className="text-xs text-text-secondary">
-          Journey home: <span className="text-text-primary">{journey.journeyHome} min</span>
-          {' · '}Total evening: <span className="text-text-primary">{journey.totalEvening} min</span>
-        </p>
-      )}
+      {/* Time pill */}
+      <div className="flex items-center gap-2 mb-2">
+        <span className="bg-accent-light text-accent font-semibold text-sm px-3 py-1 rounded-full">
+          {journey.journeyToVenue} min to venue
+        </span>
+        {journey.journeyHome > 0 && (
+          <span className="bg-bg text-text-secondary text-sm px-3 py-1 rounded-full">
+            {journey.journeyHome} min home
+          </span>
+        )}
+      </div>
 
+      {/* Last train warning */}
       {journey.lastTrainWarning && (
-        <div className="mt-2 px-2 py-1.5 bg-warning/10 border border-warning/20">
-          <p className="text-xs text-warning font-medium">
+        <div className="mt-3 px-3 py-2 bg-warning/8 border border-warning/20 rounded-xl">
+          <p className="text-sm text-warning font-medium">
             {journey.lastTrainWarning}
           </p>
         </div>

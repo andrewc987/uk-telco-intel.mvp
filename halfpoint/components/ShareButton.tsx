@@ -16,7 +16,6 @@ export default function ShareButton({ getShareUrl }: ShareButtonProps) {
       setCopied(true)
       setTimeout(() => setCopied(false), 2500)
     } catch {
-      // Fallback
       const textarea = document.createElement('textarea')
       textarea.value = url
       document.body.appendChild(textarea)
@@ -31,7 +30,11 @@ export default function ShareButton({ getShareUrl }: ShareButtonProps) {
   return (
     <button
       onClick={handleCopy}
-      className="btn-lift bg-surface border border-border px-4 py-2.5 text-sm text-text-primary hover:border-accent transition-colors"
+      className={`btn-lift px-6 py-3 rounded-full text-sm font-medium transition-all ${
+        copied
+          ? 'bg-success text-white'
+          : 'bg-accent text-white hover:bg-accent/90'
+      }`}
     >
       {copied ? 'Copied. Send it in the group chat.' : 'Copy link'}
     </button>

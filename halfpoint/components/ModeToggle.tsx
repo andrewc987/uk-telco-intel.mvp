@@ -14,15 +14,15 @@ const modes: { value: AppMode; label: string }[] = [
 
 export default function ModeToggle({ mode, onChange }: ModeToggleProps) {
   return (
-    <div className="flex border border-border">
+    <div className="flex bg-surface rounded-xl p-1 shadow-card">
       {modes.map((m) => (
         <button
           key={m.value}
           onClick={() => onChange(m.value)}
-          className={`flex-1 py-2.5 px-3 text-xs sm:text-sm transition-colors ${
+          className={`flex-1 py-2.5 px-3 text-sm rounded-lg transition-all ${
             mode === m.value
-              ? 'bg-accent text-bg font-medium'
-              : 'bg-surface text-text-secondary hover:text-text-primary'
+              ? 'bg-accent text-white font-medium shadow-sm'
+              : 'text-text-secondary hover:text-text-primary'
           }`}
         >
           {m.label}

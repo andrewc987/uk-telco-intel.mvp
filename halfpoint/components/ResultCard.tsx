@@ -21,23 +21,23 @@ export default function ResultCard({ result, algorithmMode }: ResultCardProps) {
         {result.diffSentence}
       </p>
 
-      <div className="bg-surface border border-accent/30 p-5">
-        <p className="text-xs text-text-secondary tracking-widest uppercase mb-2">
+      <div className="bg-surface rounded-2xl border-2 border-accent/20 p-6 shadow-card">
+        <p className="text-xs text-text-secondary font-medium uppercase tracking-wider mb-2">
           Best match
         </p>
-        <p className="font-display text-xl sm:text-2xl text-accent">
+        <p className="font-display text-2xl sm:text-3xl text-accent font-bold">
           {winner.stationName}
         </p>
-        <div className="flex gap-4 mt-3 text-xs text-text-secondary">
-          <span>
-            Total: <span className="text-text-primary">{winner.scores.shortestTotal} min</span>
+        <div className="flex flex-wrap gap-3 mt-3 text-sm text-text-secondary">
+          <span className="bg-bg rounded-full px-3 py-1">
+            Total: <span className="text-text-primary font-medium">{winner.scores.shortestTotal} min</span>
           </span>
-          <span>
-            Worst individual: <span className="text-text-primary">{winner.scores.fairest} min</span>
+          <span className="bg-bg rounded-full px-3 py-1">
+            Worst: <span className="text-text-primary font-medium">{winner.scores.fairest} min</span>
           </span>
           {winner.scores.fullJourneyFairness > 0 && (
-            <span>
-              Worst evening: <span className="text-text-primary">{winner.scores.fullJourneyFairness} min</span>
+            <span className="bg-bg rounded-full px-3 py-1">
+              Worst evening: <span className="text-text-primary font-medium">{winner.scores.fullJourneyFairness} min</span>
             </span>
           )}
         </div>

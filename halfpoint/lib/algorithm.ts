@@ -1,4 +1,4 @@
-import { Candidate, PersonJourney, Person, LatLng, AlgorithmMode, Result, Venue } from './types'
+import { Candidate, PersonJourney, Person, LatLng, Result } from './types'
 import { CANDIDATE_STATIONS, CandidateStation } from './candidates'
 
 interface JourneyTimeResult {
@@ -12,7 +12,6 @@ interface GeocodedPerson extends Person {
   isLondon: boolean
 }
 
-// Haversine distance in km
 function haversineKm(a: LatLng, b: LatLng): number {
   const R = 6371
   const dLat = ((b.lat - a.lat) * Math.PI) / 180
@@ -23,7 +22,6 @@ function haversineKm(a: LatLng, b: LatLng): number {
   return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
 }
 
-// Estimate journey time from straight-line distance (fallback)
 function estimateMinutes(from: LatLng, to: LatLng, mode: string): number {
   const km = haversineKm(from, to)
   switch (mode) {
@@ -35,10 +33,10 @@ function estimateMinutes(from: LatLng, to: LatLng, mode: string): number {
   }
 }
 
-// Query TfL Journey Planner
-async function queryTfL(fromLatLng: LatLng, toLatLng: LatLng, mode: string): Promise<JourneyTimeResult | null> {
+async function queryTfL(fromLatLng: LatLng, toLatLng: LatLng, preferWalk: boolean): Promise<JourneyTimeResult | null> {
   try {
-    const tflMode = mode === 'cab' ? 'taxi' : mode === 'tube' ? 'tube,dlr,overground,elizabeth-line' : mode
+    // When user prefers walk, only query walking. Otherwise query all public transport.
+    const tflMode = preferWalk ? 'walking' : 'tube,dlr,overground,elizabeth-line,bus,walking'
     const from = `${fromLatLng.lat},${fromLatLng.lng}`
     const to = `${toLatLng.lat},${toLatLng.lng}`
     const url = `https://api.tfl.gov.uk/Journey/JourneyResults/${from}/to/${to}?mode=${tflMode}&journeyPreference=LeastTime`
@@ -54,7 +52,7 @@ async function queryTfL(fromLatLng: LatLng, toLatLng: LatLng, mode: string): Pro
     if (!journey) return null
 
     const legs = journey.legs || []
-    const routeParts = legs.map((leg: { instruction?: { summary?: string }; mode?: { name?: string } }) => {
+    const routeParts = legs.map((leg: { instruction?: { summary?: string }; mode?: { id?: string; name?: string } }) => {
       return leg.instruction?.summary || leg.mode?.name || ''
     }).filter(Boolean)
 
@@ -67,39 +65,47 @@ async function queryTfL(fromLatLng: LatLng, toLatLng: LatLng, mode: string): Pro
   }
 }
 
-// Get journey time with TfL fallback to estimate
-async function getJourneyTime(from: LatLng, to: LatLng, mode: string): Promise<JourneyTimeResult> {
-  const tflResult = await queryTfL(from, to, mode)
+async function getJourneyTime(from: LatLng, to: LatLng, preferWalk: boolean): Promise<JourneyTimeResult> {
+  const tflResult = await queryTfL(from, to, preferWalk)
   if (tflResult) return tflResult
 
+  const mode = preferWalk ? 'walk' : 'tube'
   return {
     durationMinutes: estimateMinutes(from, to, mode),
-    route: `Estimated ${mode} journey`,
+    route: preferWalk ? 'Walk' : 'Tube (estimated)',
   }
 }
 
-// Pre-filter candidates to the most relevant ones to reduce API calls
 function filterCandidates(people: GeocodedPerson[], maxCandidates: number = 20): CandidateStation[] {
-  // Calculate the centroid of all origin points
   const centroid: LatLng = {
     lat: people.reduce((sum, p) => sum + p.fromLatLng.lat, 0) / people.length,
     lng: people.reduce((sum, p) => sum + p.fromLatLng.lng, 0) / people.length,
   }
 
-  // Sort by distance to centroid and take the closest ones
   return [...CANDIDATE_STATIONS]
     .sort((a, b) => haversineKm(a.latLng, centroid) - haversineKm(b.latLng, centroid))
     .slice(0, maxCandidates)
 }
 
-// Score a single candidate for all people
+function buildNarrative(personName: string, route: string, minutes: number, homeRoute?: string, homeMinutes?: number, terminalName?: string): string {
+  const outbound = `${personName}'s journey = ${minutes} min, ${route}`
+  if (homeRoute && homeMinutes && homeMinutes > 0) {
+    const homeNarrative = terminalName
+      ? `then ${homeRoute} to get home`
+      : `then ${homeRoute} home`
+    return `${outbound}, ${homeNarrative} (${homeMinutes} min)`
+  }
+  return outbound
+}
+
 async function scoreCandidate(
   station: CandidateStation,
   people: GeocodedPerson[]
 ): Promise<Candidate> {
   const journeys: PersonJourney[] = await Promise.all(
     people.map(async (person) => {
-      const toVenue = await getJourneyTime(person.fromLatLng, station.latLng, person.travelMode)
+      const preferWalk = person.travelMode === 'walk'
+      const toVenue = await getJourneyTime(person.fromLatLng, station.latLng, preferWalk)
 
       let journeyHome = 0
       let lastTrainWarning: string | undefined
@@ -107,37 +113,44 @@ async function scoreCandidate(
 
       if (person.homeLatLng) {
         if (person.londonTerminal) {
-          // Non-London: journey from venue to terminal
           const toTerminal = await getJourneyTime(
             station.latLng,
             person.londonTerminal.latLng,
-            person.travelMode
+            false // always use transit to get to terminal
           )
-          // Add approximate train time (from terminal to home)
           const trainTime = estimateMinutes(person.londonTerminal.latLng, person.homeLatLng, 'tube')
           journeyHome = toTerminal.durationMinutes + trainTime
           homeRoute = `${toTerminal.route} → Train from ${person.londonTerminal.name}`
 
-          // Last train warning
           if (person.londonTerminal.lastTrains.length > 0) {
             const lastTrain = person.londonTerminal.lastTrains[0]
-            lastTrainWarning = `Must leave by ${calculateLeaveBy(lastTrain.departureTime, toTerminal.durationMinutes)} to catch ${lastTrain.departureTime} from ${person.londonTerminal.name}`
+            lastTrainWarning = `${person.name || 'Person'} must leave by ${calculateLeaveBy(lastTrain.departureTime, toTerminal.durationMinutes)} to catch the ${lastTrain.departureTime} from ${person.londonTerminal.name}`
           }
         } else {
-          // London home: direct journey
-          const homeResult = await getJourneyTime(station.latLng, person.homeLatLng, person.travelMode)
+          const homeResult = await getJourneyTime(station.latLng, person.homeLatLng, preferWalk)
           journeyHome = homeResult.durationMinutes
           homeRoute = homeResult.route
         }
       }
 
+      const narrative = buildNarrative(
+        person.name || 'Person',
+        toVenue.route,
+        toVenue.durationMinutes,
+        homeRoute,
+        journeyHome,
+        person.londonTerminal?.name
+      )
+
       return {
         personId: person.id,
-        personName: person.name,
+        personName: person.name || 'Person',
         journeyToVenue: toVenue.durationMinutes,
         journeyHome,
         totalEvening: toVenue.durationMinutes + journeyHome,
         route: toVenue.route,
+        homeRoute,
+        narrative,
         lastTrainWarning,
       }
     })
@@ -159,7 +172,7 @@ async function scoreCandidate(
 function calculateLeaveBy(trainTime: string, travelMinutes: number): string {
   const [hours, mins] = trainTime.split(':').map(Number)
   const trainDate = new Date(2000, 0, 1, hours, mins)
-  trainDate.setMinutes(trainDate.getMinutes() - travelMinutes - 5) // 5 min buffer
+  trainDate.setMinutes(trainDate.getMinutes() - travelMinutes - 5)
   return `${String(trainDate.getHours()).padStart(2, '0')}:${String(trainDate.getMinutes()).padStart(2, '0')}`
 }
 
@@ -168,7 +181,6 @@ function generateDiffSentence(
   fairestWinner: Candidate,
   fullJourneyWinner: Candidate
 ): string {
-  // All agree
   if (
     shortestWinner.stationName === fairestWinner.stationName &&
     fairestWinner.stationName === fullJourneyWinner.stationName
@@ -185,7 +197,6 @@ function generateDiffSentence(
   )
 
   const totalSaved = fairestWinner.scores.shortestTotal - shortestWinner.scores.shortestTotal
-  const gapInShortest = worstInShortest.journeyToVenue - bestInShortest.journeyToVenue
 
   const fairestJourneys = fairestWinner.journeys
   const worstInFairest = fairestJourneys.reduce((a, b) =>
@@ -206,7 +217,6 @@ export async function runOptimisation(
 ): Promise<Omit<Result, 'venues'>> {
   const candidates = filterCandidates(people)
 
-  // Score all candidates in parallel (batched to avoid rate limits)
   const batchSize = 5
   const scored: Candidate[] = []
   for (let i = 0; i < candidates.length; i += batchSize) {
@@ -215,7 +225,6 @@ export async function runOptimisation(
     scored.push(...results)
   }
 
-  // Rank by each mode
   const byShortestTotal = [...scored].sort((a, b) => a.scores.shortestTotal - b.scores.shortestTotal)
   const byFairest = [...scored].sort((a, b) => a.scores.fairest - b.scores.fairest)
   const byFullJourney = [...scored].sort((a, b) => a.scores.fullJourneyFairness - b.scores.fullJourneyFairness)

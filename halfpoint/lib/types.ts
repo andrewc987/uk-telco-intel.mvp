@@ -1,11 +1,13 @@
 export type AlgorithmMode = 'shortest-total' | 'fairest' | 'full-journey-fairness'
 export type AppMode = 'where-to-meet' | 'how-long-can-we-stay'
-export type TravelMode = 'tube' | 'bus' | 'walk' | 'cab'
+export type TravelMode = 'tube' | 'walk'
 
 export interface Person {
   id: string
   name: string
+  fromLocation: string
   fromPostcode: string
+  homeLocation: string
   homePostcode: string
   travelMode: TravelMode
   londonTerminal?: Terminal
@@ -43,6 +45,8 @@ export interface PersonJourney {
   journeyHome: number
   totalEvening: number
   route: string
+  homeRoute: string
+  narrative: string
   lastTrainWarning?: string
 }
 

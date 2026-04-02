@@ -20,13 +20,13 @@ export default function AlgorithmToggle({ mode, onChange }: AlgorithmToggleProps
         <button
           key={algo.value}
           onClick={() => onChange(algo.value)}
-          className={`p-3 text-left border transition-colors ${
+          className={`p-3.5 text-left rounded-xl border-2 transition-all ${
             mode === algo.value
-              ? 'border-accent bg-accent/5'
-              : 'border-border bg-surface hover:border-text-secondary'
+              ? 'border-accent bg-accent-light shadow-sm'
+              : 'border-border bg-surface hover:border-accent/30 hover:shadow-card'
           }`}
         >
-          <div className={`text-sm font-medium ${mode === algo.value ? 'text-accent' : 'text-text-primary'}`}>
+          <div className={`text-sm font-semibold ${mode === algo.value ? 'text-accent' : 'text-text-primary'}`}>
             {algo.label}
           </div>
           <div className="text-xs text-text-secondary mt-0.5">
