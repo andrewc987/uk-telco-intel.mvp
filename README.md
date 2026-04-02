@@ -1,98 +1,103 @@
-# UK Telco Intelligence Platform – MVP
+# HALF·POINT
 
-A rolling intelligence board for the UK telecommunications sector. Aggregates policy documents, regulatory notices, trade press, general news, forum chatter, and weather/flood incident warnings from free public APIs and RSS feeds, then presents them in a dark "MI5 terminal" style dashboard.
+**The fairest place to meet in London.**
 
-## Project structure
+Multi-person. Multi-modal. Last-train-aware.
 
-```
-backend/
-  main.py              FastAPI application (API + frontend serving + scheduler)
-  config.py            Constants and environment variable configuration
-  database.py          SQLAlchemy engine, session factory, Base
-  models.py            Update ORM model (SQLite)
-  schemas.py           Pydantic request/response schemas
-  requirements.txt     Python dependencies
-  static/
-    index.html         MI5-style intelligence terminal UI (served at /)
-    styles.css         Dark-theme stylesheet (served at /static/styles.css)
-  ingestion/
-    __init__.py
-    base.py            Abstract ingestor + dedup/persist helpers
-    govuk.py           GOV.UK Content API (policy)
-    ofcom_rss.py       Ofcom RSS feeds (regulation)
-    thinkbroadband.py  ThinkBroadband RSS (trade press)
-    ispreview.py       ISPReview RSS (trade press)
-    googlenews.py      Google News RSS proxy (general news)
-    reddit_stub.py     Reddit stub – requires API keys (forum)
-    metoffice.py       Met Office weather warnings (incident)
-    env_agency.py      Environment Agency flood warnings (incident)
-    scheduler.py       APScheduler job definitions
+A group meetup optimiser that finds the genuinely fairest place for multiple people to meet in London, accounting for different start points, travel modes, and everyone's journey home — including trains out of London.
 
-frontend/              (legacy – kept for reference; backend/static/ is canonical)
-  index.html
-  styles.css
-
-.replit                Replit run configuration
-```
-
-## Quick start
-
-Everything runs as a **single FastAPI server** — one command, one port.
-
-### One-command run (Replit or local)
+## Quick Start
 
 ```bash
-cd backend && pip install -r requirements.txt && uvicorn main:app --host 0.0.0.0 --port 8000
+cd halfpoint
+npm install
+cp .env.local.example .env.local
+# Edit .env.local with your API keys (optional for basic functionality)
+npm run dev
 ```
 
-On Replit this is already configured in `.replit` — just press **Run**.
+Visit [http://localhost:3000](http://localhost:3000)
 
-### Local development with venv
+## Environment Variables
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `GOOGLE_MAPS_API_KEY` | Optional | Maps display, Distance Matrix, Places API |
+| `TFL_APP_KEY` | Optional | Increases TfL API rate limits |
+| `NEXT_PUBLIC_BASE_URL` | Optional | Base URL for internal API calls (default: http://localhost:3000) |
+
+The app works without any API keys — TfL journey data is free and postcodes.io requires no authentication. Without `GOOGLE_MAPS_API_KEY`, venue suggestions use mock data.
+
+## How It Works
+
+1. Each person enters their name, origin postcode, and travel mode
+2. The app geocodes postcodes via postcodes.io
+3. Non-London postcodes auto-resolve to the correct London terminal (e.g. Waterloo, Liverpool Street)
+4. The algorithm scores 20 candidate tube stations across three fairness modes
+5. Journey times come from the TfL Journey Planner API
+6. Results show the optimal meeting point with per-person journey breakdowns
+
+## Three Algorithm Modes
+
+- **Shortest total** — minimises the sum of all journey times
+- **Fairest for everyone** — minimises the worst individual journey (minimax)
+- **Full journey fairness** — minimax including the trip home
+
+## Two App Modes
+
+- **Where should we meet?** — finds the optimal meeting point from everyone's current locations
+- **How long can we stay?** — factors in home postcodes and last train times
+
+## Tech Stack
+
+- Next.js 14 (App Router)
+- TypeScript
+- Tailwind CSS
+- TfL Unified API
+- postcodes.io
+- Google Places API (optional)
+
+## Project Structure
+
+```
+halfpoint/
+├── app/
+│   ├── page.tsx              # Main app page
+│   ├── layout.tsx            # Root layout with fonts and metadata
+│   ├── globals.css           # Global styles and CSS variables
+│   └── api/
+│       ├── journey/route.ts  # TfL journey time queries
+│       ├── geocode/route.ts  # Postcode → lat/lng via postcodes.io
+│       ├── venues/route.ts   # Google Places nearby search
+│       └── optimise/route.ts # Core algorithm — scores candidate points
+├── components/
+│   ├── PersonCard.tsx        # Individual person input card
+│   ├── AddPersonButton.tsx   # Add another person CTA
+│   ├── ModeToggle.tsx        # Where to meet / How long can we stay
+│   ├── AlgorithmToggle.tsx   # Three fairness algorithm modes
+│   ├── ResultCard.tsx        # Main result with diff sentence
+│   ├── JourneyCard.tsx       # Per-person journey breakdown
+│   ├── VenueCard.tsx         # Venue suggestion card
+│   └── ShareButton.tsx       # Copy shareable URL
+├── lib/
+│   ├── algorithm.ts          # Core optimisation logic
+│   ├── terminals.ts          # Non-London postcode → terminal lookup
+│   ├── candidates.ts         # 50 London tube stations as candidates
+│   └── types.ts              # TypeScript interfaces
+└── public/
+    └── og-image.png          # Open Graph image placeholder
+```
+
+## Deploy
 
 ```bash
-cd backend
-python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn main:app --reload
+cd halfpoint
+npm run build
+npm start
 ```
 
-On first startup the app will:
-1. Create an SQLite database (`telco_intel.db`)
-2. Run every ingestor once to populate the database
-3. Start the background scheduler for recurring ingestion
+Or deploy to Vercel:
 
-Then visit **http://localhost:8000**:
-- `/` serves the MI5-style dashboard
-- `/api/*` provides JSON endpoints
-
-## API endpoints
-
-| Endpoint | Description |
-|---|---|
-| `GET /api/health` | Health check + DB row count |
-| `GET /api/updates?limit=50&offset=0&source_type=policy&search=broadband` | Filtered, paginated updates (newest first) |
-| `GET /api/updates/recent_summary` | Count of updates by source_type in the last 24 hours |
-
-## Active ingestion sources
-
-| Source | Type | Schedule | Notes |
-|---|---|---|---|
-| GOV.UK Content API | policy | every 10 min | Ofcom, DSIT, CMA documents |
-| Ofcom RSS | regulation | every 10 min | News + consultations feeds |
-| ThinkBroadband RSS | trade_press | every 15 min | UK broadband news |
-| ISPReview RSS | trade_press | every 15 min | UK ISP news |
-| Google News RSS | news | every 10 min | UK telecoms search proxy |
-| Reddit | forum | every 15 min | **Stubbed** – needs `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET` env vars |
-| Met Office Warnings | incident | every 30 min | Severe weather RSS |
-| Environment Agency | incident | every 30 min | Flood monitoring API |
-| SystemCurator | curated | daily 06:00 UTC | Auto-generated 24h summary |
-
-## Environment variables (optional)
-
-| Variable | Purpose |
-|---|---|
-| `DATABASE_URL` | SQLAlchemy DB URL (default: `sqlite:///telco_intel.db`) |
-| `REDDIT_CLIENT_ID` | Reddit API client ID |
-| `REDDIT_CLIENT_SECRET` | Reddit API client secret |
-| `REDDIT_USER_AGENT` | Reddit API user agent string |
+```bash
+npx vercel
+```
