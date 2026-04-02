@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: #0A0A0A;
+  --color-surface: #141414;
+  --color-border: #2A2A2A;
+  --color-accent: #E8FF00;
+  --color-text-primary: #F5F5F5;
+  --color-text-secondary: #888888;
+  --color-warning: #FF6B35;
+  --color-success: #00D084;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: 'IBM Plex Mono', monospace;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Stagger fade-in animation */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInBelow {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.4s ease-out forwards;
+  opacity: 0;
+}
+
+.animate-slide-in {
+  animation: slideInBelow 0.35s ease-out forwards;
+  opacity: 0;
+}
+
+.stagger-1 { animation-delay: 0ms; }
+.stagger-2 { animation-delay: 150ms; }
+.stagger-3 { animation-delay: 300ms; }
+.stagger-4 { animation-delay: 450ms; }
+.stagger-5 { animation-delay: 600ms; }
+.stagger-6 { animation-delay: 750ms; }
+.stagger-7 { animation-delay: 900ms; }
+.stagger-8 { animation-delay: 1050ms; }
+
+/* Result reveal stagger */
+.reveal-1 { animation-delay: 0ms; }
+.reveal-2 { animation-delay: 200ms; }
+.reveal-3 { animation-delay: 400ms; }
+.reveal-4 { animation-delay: 600ms; }
+.reveal-5 { animation-delay: 800ms; }
+
+/* Input styles */
+input[type="text"],
+input[type="time"] {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+}
+
+input[type="text"]:focus,
+input[type="time"]:focus {
+  border-color: var(--color-accent);
+}
+
+input[type="text"]::placeholder {
+  color: var(--color-text-secondary);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+}
+
+/* Button hover lift */
+.btn-lift {
+  transition: transform 0.1s;
+}
+.btn-lift:hover {
+  transform: translateY(-2px);
+}
