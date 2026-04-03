@@ -1,4 +1,4 @@
-run = "cd halfpoint && npm install && npm run dev -- --port 3000"
+run = "npm install && npm run dev -- --port 3000"
 modules = ["nodejs-22"]
 
 [nix]
@@ -25,7 +25,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd halfpoint && npm run dev -- --port 3000"
+args = "npm run dev -- --port 3000"
 waitForPort = 3000
 
 [workflows.workflow.metadata]

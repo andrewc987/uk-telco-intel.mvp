@@ -1,7 +1,3 @@
 {
-  "buildCommand": "cd halfpoint && npm run build",
-  "outputDirectory": "halfpoint/.next",
-  "installCommand": "cd halfpoint && npm install",
-  "framework": "nextjs",
-  "devCommand": "cd halfpoint && npm run dev"
+  "framework": "nextjs"
 }

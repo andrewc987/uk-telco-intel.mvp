@@ -2,17 +2,13 @@
 
 **The fairest place to meet in London.**
 
-Multi-person. Multi-modal. Last-train-aware.
-
-A group meetup optimiser that finds the genuinely fairest place for multiple people to meet in London, accounting for different start points, travel modes, and everyone's journey home — including trains out of London.
+A group meetup optimiser that finds the genuinely fairest place for multiple people to meet in London. Enter names and locations, hit one button — the app runs three fairness algorithms, picks the best answer, and gives you a shareable briefing with per-person routes and last-train warnings.
 
 ## Quick Start
 
 ```bash
-cd halfpoint
 npm install
 cp .env.local.example .env.local
-# Edit .env.local with your API keys (optional for basic functionality)
 npm run dev
 ```
 
@@ -22,82 +18,28 @@ Visit [http://localhost:3000](http://localhost:3000)
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `GOOGLE_MAPS_API_KEY` | Optional | Maps display, Distance Matrix, Places API |
+| `GOOGLE_MAPS_API_KEY` | Optional | Places autocomplete + venue search |
 | `TFL_APP_KEY` | Optional | Increases TfL API rate limits |
 | `NEXT_PUBLIC_BASE_URL` | Optional | Base URL for internal API calls (default: http://localhost:3000) |
 
-The app works without any API keys — TfL journey data is free and postcodes.io requires no authentication. Without `GOOGLE_MAPS_API_KEY`, venue suggestions use mock data.
+Works without any API keys — TfL and postcodes.io are free. Add `GOOGLE_MAPS_API_KEY` for Google Places autocomplete and real venue data.
 
 ## How It Works
 
-1. Each person enters their name, origin postcode, and travel mode
-2. The app geocodes postcodes via postcodes.io
-3. Non-London postcodes auto-resolve to the correct London terminal (e.g. Waterloo, Liverpool Street)
-4. The algorithm scores 20 candidate tube stations across three fairness modes
+1. Each person enters their name, where they're coming from, and where they're going home to
+2. The app resolves locations to coordinates (Google Places or postcodes.io)
+3. Non-London home locations auto-resolve to the correct London terminal (Waterloo, Liverpool Street, etc.)
+4. Three fairness algorithms run simultaneously and the app picks the best recommendation
 5. Journey times come from the TfL Journey Planner API
-6. Results show the optimal meeting point with per-person journey breakdowns
-
-## Three Algorithm Modes
-
-- **Shortest total** — minimises the sum of all journey times
-- **Fairest for everyone** — minimises the worst individual journey (minimax)
-- **Full journey fairness** — minimax including the trip home
-
-## Two App Modes
-
-- **Where should we meet?** — finds the optimal meeting point from everyone's current locations
-- **How long can we stay?** — factors in home postcodes and last train times
+6. Result is a shareable briefing with routes, times, last-train warnings, and nearby venues
 
 ## Tech Stack
 
-- Next.js 14 (App Router)
-- TypeScript
-- Tailwind CSS
-- TfL Unified API
-- postcodes.io
-- Google Places API (optional)
-
-## Project Structure
-
-```
-halfpoint/
-├── app/
-│   ├── page.tsx              # Main app page
-│   ├── layout.tsx            # Root layout with fonts and metadata
-│   ├── globals.css           # Global styles and CSS variables
-│   └── api/
-│       ├── journey/route.ts  # TfL journey time queries
-│       ├── geocode/route.ts  # Postcode → lat/lng via postcodes.io
-│       ├── venues/route.ts   # Google Places nearby search
-│       └── optimise/route.ts # Core algorithm — scores candidate points
-├── components/
-│   ├── PersonCard.tsx        # Individual person input card
-│   ├── AddPersonButton.tsx   # Add another person CTA
-│   ├── ModeToggle.tsx        # Where to meet / How long can we stay
-│   ├── AlgorithmToggle.tsx   # Three fairness algorithm modes
-│   ├── ResultCard.tsx        # Main result with diff sentence
-│   ├── JourneyCard.tsx       # Per-person journey breakdown
-│   ├── VenueCard.tsx         # Venue suggestion card
-│   └── ShareButton.tsx       # Copy shareable URL
-├── lib/
-│   ├── algorithm.ts          # Core optimisation logic
-│   ├── terminals.ts          # Non-London postcode → terminal lookup
-│   ├── candidates.ts         # 50 London tube stations as candidates
-│   └── types.ts              # TypeScript interfaces
-└── public/
-    └── og-image.png          # Open Graph image placeholder
-```
+- Next.js 14 (App Router) + TypeScript + Tailwind CSS
+- TfL Unified API + postcodes.io + Google Places API
 
 ## Deploy
 
 ```bash
-cd halfpoint
-npm run build
-npm start
-```
-
-Or deploy to Vercel:
-
-```bash
-npx vercel
+npm run build && npm start
 ```
