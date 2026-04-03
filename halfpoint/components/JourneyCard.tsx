@@ -8,26 +8,29 @@ interface JourneyCardProps {
 }
 
 export default function JourneyCard({ journey, index }: JourneyCardProps) {
+  const routeLines = journey.narrative.split('\n')
+
   return (
     <div
-      className="animate-fade-up bg-surface rounded-2xl shadow-card p-5"
-      style={{ animationDelay: `${200 + index * 150}ms` }}
+      className="animate-fade-up bg-surface rounded-2xl shadow-card p-4 sm:p-5"
+      style={{ animationDelay: `${150 + index * 120}ms` }}
     >
-      {/* Narrative first */}
-      <p className="text-sm text-text-primary leading-relaxed mb-3">
-        {journey.narrative}
-      </p>
-
-      {/* Time pill */}
-      <div className="flex items-center gap-2 mb-2">
-        <span className="bg-accent-light text-accent font-semibold text-sm px-3 py-1 rounded-full">
-          {journey.journeyToVenue} min to venue
+      <div className="flex items-center justify-between mb-2">
+        <span className="font-semibold text-text-primary">
+          {journey.personName}
         </span>
-        {journey.journeyHome > 0 && (
-          <span className="bg-bg text-text-secondary text-sm px-3 py-1 rounded-full">
-            {journey.journeyHome} min home
-          </span>
-        )}
+        <span className="bg-accent text-white text-sm font-semibold px-3 py-0.5 rounded-full">
+          {journey.journeyToVenue} min
+        </span>
+      </div>
+
+      {/* Route narrative */}
+      <div className="space-y-1">
+        {routeLines.map((line, i) => (
+          <p key={i} className={`text-sm leading-relaxed ${i === 0 ? 'text-text-secondary' : 'text-text-secondary/80'}`}>
+            {line}
+          </p>
+        ))}
       </div>
 
       {/* Last train warning */}

@@ -1,24 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runOptimisation, GeocodedPerson } from '@/lib/algorithm'
-import { Person, LatLng, Venue } from '@/lib/types'
+import { Person, Venue } from '@/lib/types'
 import { isLondonBorough, lookupTerminal, getPostcodeOutward } from '@/lib/terminals'
 
-async function geocodePostcode(postcode: string): Promise<{
-  latLng: LatLng
+async function reverseGeocode(lat: number, lng: number): Promise<{
+  postcode: string
   isLondon: boolean
   adminDistrict: string
 } | null> {
   try {
-    const clean = postcode.replace(/\s+/g, '').toUpperCase()
-    const res = await fetch(`https://api.postcodes.io/postcodes/${clean}`, {
+    const res = await fetch(`https://api.postcodes.io/postcodes?lon=${lng}&lat=${lat}&limit=1`, {
       signal: AbortSignal.timeout(5000),
     })
     if (!res.ok) return null
     const data = await res.json()
-    const result = data.result
+    const result = data.result?.[0]
     if (!result) return null
     return {
-      latLng: { lat: result.latitude, lng: result.longitude },
+      postcode: result.postcode,
       isLondon: isLondonBorough(result.admin_district || ''),
       adminDistrict: result.admin_district || '',
     }
@@ -54,39 +53,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Maximum 8 people' }, { status: 400 })
     }
 
-    // Geocode all postcodes in parallel
+    // Build geocoded people — lat/lng comes from client, we just need to resolve terminals
     const geocoded: GeocodedPerson[] = await Promise.all(
       people.map(async (person) => {
-        const fromGeo = await geocodePostcode(person.fromPostcode)
-        const homeGeo = person.homePostcode ? await geocodePostcode(person.homePostcode) : null
-
-        if (!fromGeo) {
-          throw new Error(`Could not geocode postcode: ${person.fromPostcode}`)
+        if (!person.fromLatLng) {
+          throw new Error(`No location for ${person.name || 'a person'}. Select from the dropdown.`)
         }
 
+        let isLondon = true
         let terminal = person.londonTerminal
-        if (homeGeo && !homeGeo.isLondon) {
-          const outward = getPostcodeOutward(person.homePostcode)
-          terminal = lookupTerminal(outward) || undefined
+
+        // If home location provided, check if non-London
+        if (person.homeLatLng && !terminal) {
+          const homeGeo = await reverseGeocode(person.homeLatLng.lat, person.homeLatLng.lng)
+          if (homeGeo) {
+            isLondon = homeGeo.isLondon
+            if (!isLondon) {
+              const outward = getPostcodeOutward(homeGeo.postcode)
+              terminal = lookupTerminal(outward) || undefined
+            }
+          }
         }
 
         return {
           ...person,
-          fromLatLng: fromGeo.latLng,
-          homeLatLng: homeGeo?.latLng,
-          isLondon: homeGeo ? homeGeo.isLondon : true,
+          isLondon,
           londonTerminal: terminal,
         }
       })
     )
 
-    // Run the optimisation
     const result = await runOptimisation(geocoded)
 
-    // Fetch venues for the fairest winner
+    // Fetch venues for the recommended winner
     const venues = await fetchVenues(
-      result.fairestWinner.latLng.lat,
-      result.fairestWinner.latLng.lng
+      result.recommended.latLng.lat,
+      result.recommended.latLng.lng
     )
 
     return NextResponse.json({

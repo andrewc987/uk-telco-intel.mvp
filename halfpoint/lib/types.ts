@@ -1,15 +1,11 @@
-export type AlgorithmMode = 'shortest-total' | 'fairest' | 'full-journey-fairness'
-export type AppMode = 'where-to-meet' | 'how-long-can-we-stay'
-export type TravelMode = 'tube' | 'walk'
-
 export interface Person {
   id: string
   name: string
   fromLocation: string
-  fromPostcode: string
+  fromLatLng: { lat: number; lng: number } | null
   homeLocation: string
+  homeLatLng: { lat: number; lng: number } | null
   homePostcode: string
-  travelMode: TravelMode
   londonTerminal?: Terminal
 }
 
@@ -48,13 +44,17 @@ export interface PersonJourney {
   homeRoute: string
   narrative: string
   lastTrainWarning?: string
+  leaveByTime?: string
 }
 
 export interface Result {
+  recommended: Candidate
   shortestTotalWinner: Candidate
   fairestWinner: Candidate
   fullJourneyWinner: Candidate
-  diffSentence: string
+  headline: string
+  summary: string
+  whyHere: string[]
   venues: Venue[]
 }
 
@@ -65,17 +65,9 @@ export interface Venue {
   address: string
   walkingMinutes: number
   googlePlacesId: string
-  bookingUrl?: string
 }
 
 export interface LatLng {
   lat: number
   lng: number
-}
-
-export interface GeocodedPostcode {
-  postcode: string
-  latLng: LatLng
-  isLondon: boolean
-  adminDistrict: string
 }

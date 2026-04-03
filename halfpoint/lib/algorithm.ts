@@ -7,8 +7,6 @@ interface JourneyTimeResult {
 }
 
 interface GeocodedPerson extends Person {
-  fromLatLng: LatLng
-  homeLatLng?: LatLng
   isLondon: boolean
 }
 
@@ -22,21 +20,14 @@ function haversineKm(a: LatLng, b: LatLng): number {
   return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
 }
 
-function estimateMinutes(from: LatLng, to: LatLng, mode: string): number {
+function estimateMinutes(from: LatLng, to: LatLng): number {
   const km = haversineKm(from, to)
-  switch (mode) {
-    case 'walk': return Math.round((km / 5) * 60)
-    case 'bus': return Math.round((km / 15) * 60) + 5
-    case 'cab': return Math.round((km / 25) * 60) + 5
-    case 'tube':
-    default: return Math.round((km / 30) * 60) + 8
-  }
+  return Math.round((km / 30) * 60) + 8
 }
 
-async function queryTfL(fromLatLng: LatLng, toLatLng: LatLng, preferWalk: boolean): Promise<JourneyTimeResult | null> {
+async function queryTfL(fromLatLng: LatLng, toLatLng: LatLng): Promise<JourneyTimeResult | null> {
   try {
-    // When user prefers walk, only query walking. Otherwise query all public transport.
-    const tflMode = preferWalk ? 'walking' : 'tube,dlr,overground,elizabeth-line,bus,walking'
+    const tflMode = 'tube,dlr,overground,elizabeth-line,bus,walking'
     const from = `${fromLatLng.lat},${fromLatLng.lng}`
     const to = `${toLatLng.lat},${toLatLng.lng}`
     const url = `https://api.tfl.gov.uk/Journey/JourneyResults/${from}/to/${to}?mode=${tflMode}&journeyPreference=LeastTime`
@@ -52,7 +43,7 @@ async function queryTfL(fromLatLng: LatLng, toLatLng: LatLng, preferWalk: boolea
     if (!journey) return null
 
     const legs = journey.legs || []
-    const routeParts = legs.map((leg: { instruction?: { summary?: string }; mode?: { id?: string; name?: string } }) => {
+    const routeParts = legs.map((leg: { instruction?: { summary?: string }; mode?: { name?: string } }) => {
       return leg.instruction?.summary || leg.mode?.name || ''
     }).filter(Boolean)
 
@@ -65,21 +56,21 @@ async function queryTfL(fromLatLng: LatLng, toLatLng: LatLng, preferWalk: boolea
   }
 }
 
-async function getJourneyTime(from: LatLng, to: LatLng, preferWalk: boolean): Promise<JourneyTimeResult> {
-  const tflResult = await queryTfL(from, to, preferWalk)
+async function getJourneyTime(from: LatLng, to: LatLng): Promise<JourneyTimeResult> {
+  const tflResult = await queryTfL(from, to)
   if (tflResult) return tflResult
 
-  const mode = preferWalk ? 'walk' : 'tube'
   return {
-    durationMinutes: estimateMinutes(from, to, mode),
-    route: preferWalk ? 'Walk' : 'Tube (estimated)',
+    durationMinutes: estimateMinutes(from, to),
+    route: 'Public transport (estimated)',
   }
 }
 
 function filterCandidates(people: GeocodedPerson[], maxCandidates: number = 20): CandidateStation[] {
+  const origins = people.filter(p => p.fromLatLng).map(p => p.fromLatLng!)
   const centroid: LatLng = {
-    lat: people.reduce((sum, p) => sum + p.fromLatLng.lat, 0) / people.length,
-    lng: people.reduce((sum, p) => sum + p.fromLatLng.lng, 0) / people.length,
+    lat: origins.reduce((sum, p) => sum + p.lat, 0) / origins.length,
+    lng: origins.reduce((sum, p) => sum + p.lng, 0) / origins.length,
   }
 
   return [...CANDIDATE_STATIONS]
@@ -87,15 +78,11 @@ function filterCandidates(people: GeocodedPerson[], maxCandidates: number = 20):
     .slice(0, maxCandidates)
 }
 
-function buildNarrative(personName: string, route: string, minutes: number, homeRoute?: string, homeMinutes?: number, terminalName?: string): string {
-  const outbound = `${personName}'s journey = ${minutes} min, ${route}`
-  if (homeRoute && homeMinutes && homeMinutes > 0) {
-    const homeNarrative = terminalName
-      ? `then ${homeRoute} to get home`
-      : `then ${homeRoute} home`
-    return `${outbound}, ${homeNarrative} (${homeMinutes} min)`
-  }
-  return outbound
+function calculateLeaveBy(trainTime: string, travelMinutes: number): string {
+  const [hours, mins] = trainTime.split(':').map(Number)
+  const trainDate = new Date(2000, 0, 1, hours, mins)
+  trainDate.setMinutes(trainDate.getMinutes() - travelMinutes - 5)
+  return `${String(trainDate.getHours()).padStart(2, '0')}:${String(trainDate.getMinutes()).padStart(2, '0')}`
 }
 
 async function scoreCandidate(
@@ -104,47 +91,64 @@ async function scoreCandidate(
 ): Promise<Candidate> {
   const journeys: PersonJourney[] = await Promise.all(
     people.map(async (person) => {
-      const preferWalk = person.travelMode === 'walk'
-      const toVenue = await getJourneyTime(person.fromLatLng, station.latLng, preferWalk)
+      if (!person.fromLatLng) {
+        return {
+          personId: person.id,
+          personName: person.name || 'Someone',
+          journeyToVenue: 0,
+          journeyHome: 0,
+          totalEvening: 0,
+          route: 'Unknown origin',
+          homeRoute: '',
+          narrative: `${person.name || 'Someone'} — unknown origin`,
+        }
+      }
+
+      const toVenue = await getJourneyTime(person.fromLatLng, station.latLng)
 
       let journeyHome = 0
       let lastTrainWarning: string | undefined
+      let leaveByTime: string | undefined
       let homeRoute = ''
 
       if (person.homeLatLng) {
         if (person.londonTerminal) {
-          const toTerminal = await getJourneyTime(
-            station.latLng,
-            person.londonTerminal.latLng,
-            false // always use transit to get to terminal
-          )
-          const trainTime = estimateMinutes(person.londonTerminal.latLng, person.homeLatLng, 'tube')
+          // Non-London: transit to terminal, then train
+          const toTerminal = await getJourneyTime(station.latLng, person.londonTerminal.latLng)
+          const trainTime = estimateMinutes(person.londonTerminal.latLng, person.homeLatLng)
           journeyHome = toTerminal.durationMinutes + trainTime
           homeRoute = `${toTerminal.route} → Train from ${person.londonTerminal.name}`
 
           if (person.londonTerminal.lastTrains.length > 0) {
             const lastTrain = person.londonTerminal.lastTrains[0]
-            lastTrainWarning = `${person.name || 'Person'} must leave by ${calculateLeaveBy(lastTrain.departureTime, toTerminal.durationMinutes)} to catch the ${lastTrain.departureTime} from ${person.londonTerminal.name}`
+            leaveByTime = calculateLeaveBy(lastTrain.departureTime, toTerminal.durationMinutes)
+            lastTrainWarning = `Leave by ${leaveByTime} or you're not catching the ${lastTrain.departureTime} from ${person.londonTerminal.name}`
           }
         } else {
-          const homeResult = await getJourneyTime(station.latLng, person.homeLatLng, preferWalk)
+          const homeResult = await getJourneyTime(station.latLng, person.homeLatLng)
           journeyHome = homeResult.durationMinutes
           homeRoute = homeResult.route
         }
       }
 
-      const narrative = buildNarrative(
-        person.name || 'Person',
-        toVenue.route,
-        toVenue.durationMinutes,
-        homeRoute,
-        journeyHome,
-        person.londonTerminal?.name
-      )
+      // Build the narrative
+      const name = person.name || 'Someone'
+      let narrative = `${toVenue.route} — ${toVenue.durationMinutes} mins`
+      if (homeRoute && journeyHome > 0) {
+        if (person.londonTerminal) {
+          const lastTrain = person.londonTerminal.lastTrains[0]
+          narrative += `\nThen the ${lastTrain?.departureTime || 'last train'} from ${person.londonTerminal.name} to ${person.homeLocation || 'home'}`
+          if (leaveByTime) {
+            narrative += ` — leave the venue by ${leaveByTime}`
+          }
+        } else {
+          narrative += `\nHome via ${homeRoute} — ${journeyHome} mins`
+        }
+      }
 
       return {
         personId: person.id,
-        personName: person.name || 'Person',
+        personName: name,
         journeyToVenue: toVenue.durationMinutes,
         journeyHome,
         totalEvening: toVenue.durationMinutes + journeyHome,
@@ -152,6 +156,7 @@ async function scoreCandidate(
         homeRoute,
         narrative,
         lastTrainWarning,
+        leaveByTime,
       }
     })
   )
@@ -169,47 +174,39 @@ async function scoreCandidate(
   }
 }
 
-function calculateLeaveBy(trainTime: string, travelMinutes: number): string {
-  const [hours, mins] = trainTime.split(':').map(Number)
-  const trainDate = new Date(2000, 0, 1, hours, mins)
-  trainDate.setMinutes(trainDate.getMinutes() - travelMinutes - 5)
-  return `${String(trainDate.getHours()).padStart(2, '0')}:${String(trainDate.getMinutes()).padStart(2, '0')}`
+const SUMMARY_LINES_AGREE = [
+  "Three different ways of measuring fair. All point here.",
+  "The algorithm ran three versions of fair. They all agree.",
+  "However you slice it, this is the spot.",
+]
+
+const SUMMARY_LINES_DISAGREE = [
+  "Not everyone travels the same distance. This is as even as London gets.",
+  "Someone always draws the short straw. This minimises how short.",
+  "It's not perfect for everyone. But it's the fairest call.",
+]
+
+function pickRandom(arr: string[]): string {
+  return arr[Math.floor(Math.random() * arr.length)]
 }
 
-function generateDiffSentence(
-  shortestWinner: Candidate,
-  fairestWinner: Candidate,
-  fullJourneyWinner: Candidate
-): string {
-  if (
-    shortestWinner.stationName === fairestWinner.stationName &&
-    fairestWinner.stationName === fullJourneyWinner.stationName
-  ) {
-    return `All three modes agree: ${shortestWinner.stationName}. That's a good sign.`
-  }
+function generateWhyHere(
+  shortest: Candidate,
+  fairest: Candidate,
+  fullJourney: Candidate
+): string[] {
+  const lines: string[] = []
 
-  const shortestJourneys = shortestWinner.journeys
-  const worstInShortest = shortestJourneys.reduce((a, b) =>
-    a.journeyToVenue > b.journeyToVenue ? a : b
-  )
-  const bestInShortest = shortestJourneys.reduce((a, b) =>
-    a.journeyToVenue < b.journeyToVenue ? a : b
-  )
+  const shortestGap = Math.max(...shortest.journeys.map(j => j.journeyToVenue)) - Math.min(...shortest.journeys.map(j => j.journeyToVenue))
+  lines.push(`Shortest total: ${shortest.stationName} (saves ${shortest.scores.shortestTotal} mins combined, but ${shortestGap} min gap between best and worst)`)
 
-  const totalSaved = fairestWinner.scores.shortestTotal - shortestWinner.scores.shortestTotal
+  const fairestGap = Math.max(...fairest.journeys.map(j => j.journeyToVenue)) - Math.min(...fairest.journeys.map(j => j.journeyToVenue))
+  lines.push(`Fairest for everyone: ${fairest.stationName} (closes the gap to ${fairestGap} mins)`)
 
-  const fairestJourneys = fairestWinner.journeys
-  const worstInFairest = fairestJourneys.reduce((a, b) =>
-    a.journeyToVenue > b.journeyToVenue ? a : b
-  )
-  const bestInFairest = fairestJourneys.reduce((a, b) =>
-    a.journeyToVenue < b.journeyToVenue ? a : b
-  )
-  const gapInFairest = worstInFairest.journeyToVenue - bestInFairest.journeyToVenue
+  const isRecommended = fullJourney.stationName === fairest.stationName
+  lines.push(`Full journey fairness: ${fullJourney.stationName}${isRecommended ? ' ✓' : ''} (accounts for trains home)`)
 
-  const avgExtraPerPerson = Math.round(totalSaved / shortestJourneys.length)
-
-  return `${shortestWinner.stationName} saves ${Math.abs(totalSaved)} mins overall, but ${worstInShortest.personName} gets ${worstInShortest.journeyToVenue} mins vs ${bestInShortest.personName}'s ${bestInShortest.journeyToVenue}. Fair mode at ${fairestWinner.stationName} costs everyone ~${avgExtraPerPerson} mins more — and closes that gap to ${gapInFairest} minutes.`
+  return lines
 }
 
 export async function runOptimisation(
@@ -233,13 +230,26 @@ export async function runOptimisation(
   const fairestWinner = byFairest[0]
   const fullJourneyWinner = byFullJourney[0]
 
-  const diffSentence = generateDiffSentence(shortestTotalWinner, fairestWinner, fullJourneyWinner)
+  // Auto-pick: if fairest and full-journey agree, use that. Otherwise use full-journey as tiebreaker.
+  const recommended = fairestWinner.stationName === fullJourneyWinner.stationName
+    ? fairestWinner
+    : fullJourneyWinner
+
+  const allAgree = shortestTotalWinner.stationName === fairestWinner.stationName &&
+    fairestWinner.stationName === fullJourneyWinner.stationName
+
+  const headline = recommended.stationName
+  const summary = allAgree ? pickRandom(SUMMARY_LINES_AGREE) : pickRandom(SUMMARY_LINES_DISAGREE)
+  const whyHere = generateWhyHere(shortestTotalWinner, fairestWinner, fullJourneyWinner)
 
   return {
+    recommended,
     shortestTotalWinner,
     fairestWinner,
     fullJourneyWinner,
-    diffSentence,
+    headline,
+    summary,
+    whyHere,
   }
 }
 
