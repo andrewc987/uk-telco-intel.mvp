@@ -4,6 +4,14 @@ import { CANDIDATE_STATIONS, CandidateStation } from './candidates'
 interface JourneyTimeResult {
   durationMinutes: number
   route: string
+  steps: string[]
+}
+
+function formatDuration(mins: number): string {
+  if (mins < 60) return `${mins} mins`
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return m === 0 ? `${h}h` : `${h}h ${m}mins`
 }
 
 interface GeocodedPerson extends Person {
@@ -50,6 +58,7 @@ async function queryTfL(fromLatLng: LatLng, toLatLng: LatLng): Promise<JourneyTi
     return {
       durationMinutes: journey.duration || 0,
       route: routeParts.join(' → ') || 'Direct',
+      steps: routeParts.length > 0 ? routeParts : ['Direct'],
     }
   } catch {
     return null
@@ -63,6 +72,7 @@ async function getJourneyTime(from: LatLng, to: LatLng): Promise<JourneyTimeResu
   return {
     durationMinutes: estimateMinutes(from, to),
     route: 'Public transport (estimated)',
+    steps: ['Public transport (estimated)'],
   }
 }
 
@@ -131,20 +141,27 @@ async function scoreCandidate(
         }
       }
 
-      // Build the narrative
+      // Build the narrative as step-by-step lines
       const name = person.name || 'Someone'
-      let narrative = `${toVenue.route} — ${toVenue.durationMinutes} mins`
+      const lines: string[] = []
+      lines.push(`Starts at ${person.fromLocation || 'their location'}`)
+      for (const step of toVenue.steps) {
+        lines.push(step)
+      }
+      lines.push(`Time: ${formatDuration(toVenue.durationMinutes)}`)
+
       if (homeRoute && journeyHome > 0) {
         if (person.londonTerminal) {
           const lastTrain = person.londonTerminal.lastTrains[0]
-          narrative += `\nThen the ${lastTrain?.departureTime || 'last train'} from ${person.londonTerminal.name} to ${person.homeLocation || 'home'}`
+          lines.push(`Then ${lastTrain?.departureTime || 'last train'} from ${person.londonTerminal.name} to ${person.homeLocation || 'home'}`)
           if (leaveByTime) {
-            narrative += ` — leave the venue by ${leaveByTime}`
+            lines.push(`Leave the venue by ${leaveByTime}`)
           }
         } else {
-          narrative += `\nHome via ${homeRoute} — ${journeyHome} mins`
+          lines.push(`Home: ${formatDuration(journeyHome)}`)
         }
       }
+      const narrative = lines.join('\n')
 
       return {
         personId: person.id,
@@ -198,10 +215,10 @@ function generateWhyHere(
   const lines: string[] = []
 
   const shortestGap = Math.max(...shortest.journeys.map(j => j.journeyToVenue)) - Math.min(...shortest.journeys.map(j => j.journeyToVenue))
-  lines.push(`Shortest total: ${shortest.stationName} (saves ${shortest.scores.shortestTotal} mins combined, but ${shortestGap} min gap between best and worst)`)
+  lines.push(`Shortest total: ${shortest.stationName} (saves ${formatDuration(shortest.scores.shortestTotal)} combined, but ${formatDuration(shortestGap)} gap between best and worst)`)
 
   const fairestGap = Math.max(...fairest.journeys.map(j => j.journeyToVenue)) - Math.min(...fairest.journeys.map(j => j.journeyToVenue))
-  lines.push(`Fairest for everyone: ${fairest.stationName} (closes the gap to ${fairestGap} mins)`)
+  lines.push(`Fairest for everyone: ${fairest.stationName} (closes the gap to ${formatDuration(fairestGap)})`)
 
   const isRecommended = fullJourney.stationName === fairest.stationName
   lines.push(`Full journey fairness: ${fullJourney.stationName}${isRecommended ? ' ✓' : ''} (accounts for trains home)`)
