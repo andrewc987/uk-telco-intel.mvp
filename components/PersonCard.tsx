@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Person, Terminal } from '@/lib/types'
 
 interface Prediction {
   description: string
   placeId?: string
   latLng?: { lat: number; lng: number }
+  type?: string
 }
 
 interface PersonCardProps {
@@ -32,7 +33,8 @@ export default function PersonCard({
   const [showHome, setShowHome] = useState(false)
   const fromRef = useRef<HTMLDivElement>(null)
   const homeRef = useRef<HTMLDivElement>(null)
-  const debounceRef = useRef<NodeJS.Timeout>(null)
+  const fromDebounce = useRef<NodeJS.Timeout>(null)
+  const homeDebounce = useRef<NodeJS.Timeout>(null)
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -43,26 +45,70 @@ export default function PersonCard({
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const fetchPredictions = async (query: string, setter: (p: Prediction[]) => void, showSetter: (v: boolean) => void) => {
-    if (query.length < 2) { setter([]); showSetter(false); return }
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-
-    debounceRef.current = setTimeout(async () => {
+  const searchFrom = useCallback((query: string) => {
+    if (query.length < 2) { setFromPredictions([]); setShowFrom(false); return }
+    if (fromDebounce.current) clearTimeout(fromDebounce.current)
+    fromDebounce.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/places?q=${encodeURIComponent(query)}`)
         if (!res.ok) return
         const data = await res.json()
-        setter(data.predictions || [])
-        showSetter((data.predictions || []).length > 0)
+        const preds = data.predictions || []
+        setFromPredictions(preds)
+        setShowFrom(preds.length > 0)
       } catch { /* ignore */ }
-    }, 250)
-  }
+    }, 200)
+  }, [])
+
+  const searchHome = useCallback((query: string) => {
+    if (query.length < 2) { setHomePredictions([]); setShowHome(false); return }
+    if (homeDebounce.current) clearTimeout(homeDebounce.current)
+    homeDebounce.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/places?q=${encodeURIComponent(query)}`)
+        if (!res.ok) return
+        const data = await res.json()
+        const preds = data.predictions || []
+        setHomePredictions(preds)
+        setShowHome(preds.length > 0)
+      } catch { /* ignore */ }
+    }, 200)
+  }, [])
 
   const selectPrediction = async (field: 'from' | 'home', pred: Prediction) => {
     const label = pred.description
 
+    // If prediction already has lat/lng (local dataset or postcode), use it directly
+    if (pred.latLng) {
+      if (field === 'from') {
+        setFromQuery(label)
+        setShowFrom(false)
+        onUpdate({ ...person, fromLocation: label, fromLatLng: pred.latLng })
+      } else {
+        setHomeQuery(label)
+        setShowHome(false)
+        // Resolve terminal info for home locations
+        try {
+          const res = await fetch(`/api/place-details?lat=${pred.latLng.lat}&lng=${pred.latLng.lng}`)
+          if (res.ok) {
+            const data = await res.json()
+            onUpdate({
+              ...person,
+              homeLocation: label,
+              homeLatLng: pred.latLng,
+              homePostcode: data.postcode || '',
+              londonTerminal: data.terminal as Terminal | undefined,
+            })
+            return
+          }
+        } catch { /* ignore */ }
+        onUpdate({ ...person, homeLocation: label, homeLatLng: pred.latLng })
+      }
+      return
+    }
+
+    // If prediction has a placeId (Google Places), resolve it
     if (pred.placeId) {
-      // Google Places — resolve to lat/lng
       try {
         const res = await fetch(`/api/place-details?placeId=${pred.placeId}`)
         if (res.ok) {
@@ -86,34 +132,6 @@ export default function PersonCard({
         }
       } catch { /* fall through */ }
     }
-
-    if (pred.latLng) {
-      // Postcodes.io fallback — already has lat/lng
-      if (field === 'from') {
-        setFromQuery(label)
-        setShowFrom(false)
-        onUpdate({ ...person, fromLocation: label, fromLatLng: pred.latLng })
-      } else {
-        setHomeQuery(label)
-        setShowHome(false)
-        // Resolve terminal for home
-        try {
-          const res = await fetch(`/api/place-details?lat=${pred.latLng.lat}&lng=${pred.latLng.lng}`)
-          if (res.ok) {
-            const data = await res.json()
-            onUpdate({
-              ...person,
-              homeLocation: label,
-              homeLatLng: pred.latLng,
-              homePostcode: data.postcode || '',
-              londonTerminal: data.terminal as Terminal | undefined,
-            })
-            return
-          }
-        } catch { /* ignore */ }
-        onUpdate({ ...person, homeLocation: label, homeLatLng: pred.latLng })
-      }
-    }
   }
 
   return (
@@ -136,7 +154,6 @@ export default function PersonCard({
       </div>
 
       <div className="space-y-3">
-        {/* Name */}
         <input
           type="text"
           placeholder="First name"
@@ -152,9 +169,10 @@ export default function PersonCard({
             placeholder="Office or area"
             value={fromQuery}
             onChange={(e) => {
-              setFromQuery(e.target.value)
-              onUpdate({ ...person, fromLocation: e.target.value, fromLatLng: null })
-              fetchPredictions(e.target.value, setFromPredictions, setShowFrom)
+              const val = e.target.value
+              setFromQuery(val)
+              onUpdate({ ...person, fromLocation: val, fromLatLng: null })
+              searchFrom(val)
             }}
           />
           {person.fromLatLng && (
@@ -164,7 +182,10 @@ export default function PersonCard({
             <div className="autocomplete-dropdown">
               {fromPredictions.map((p, i) => (
                 <div key={i} className="autocomplete-item" onClick={() => selectPrediction('from', p)}>
-                  {p.description}
+                  <span className="text-text-primary">{p.description}</span>
+                  {p.type && (
+                    <span className="text-text-secondary text-xs ml-2 capitalize">{p.type}</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -178,9 +199,10 @@ export default function PersonCard({
             placeholder="Home area or station"
             value={homeQuery}
             onChange={(e) => {
-              setHomeQuery(e.target.value)
-              onUpdate({ ...person, homeLocation: e.target.value, homeLatLng: null, londonTerminal: undefined })
-              fetchPredictions(e.target.value, setHomePredictions, setShowHome)
+              const val = e.target.value
+              setHomeQuery(val)
+              onUpdate({ ...person, homeLocation: val, homeLatLng: null, londonTerminal: undefined })
+              searchHome(val)
             }}
           />
           {person.homeLatLng && (
@@ -190,7 +212,10 @@ export default function PersonCard({
             <div className="autocomplete-dropdown">
               {homePredictions.map((p, i) => (
                 <div key={i} className="autocomplete-item" onClick={() => selectPrediction('home', p)}>
-                  {p.description}
+                  <span className="text-text-primary">{p.description}</span>
+                  {p.type && (
+                    <span className="text-text-secondary text-xs ml-2 capitalize">{p.type}</span>
+                  )}
                 </div>
               ))}
             </div>
