@@ -54,8 +54,5 @@ export interface OptimiseResponse {
 export interface Venue {
   name: string
   type: string
-  rating: number
-  address: string
   walkingMinutes: number
-  googlePlacesId: string
 }

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { OptimiseResponse, ScoredCandidate } from '@/lib/types'
+import { useState, useEffect, useRef } from 'react'
+import { OptimiseResponse, ScoredCandidate, Venue } from '@/lib/types'
 import MiniMap from './MiniMap'
 
 type Mode = 'fairest' | 'quickest'
@@ -30,6 +30,62 @@ function JourneyLeg({ leg, index }: { leg: ScoredCandidate['legs'][number]; inde
         </span>
       )}
     </div>
+  )
+}
+
+function VenueList({ latLng, placeName }: { latLng: { lat: number; lng: number }; placeName: string }) {
+  const [venues, setVenues] = useState<Venue[]>([])
+  const cache = useRef<Map<string, Venue[]>>(new Map())
+
+  useEffect(() => {
+    const key = `${latLng.lat},${latLng.lng}`
+    const cached = cache.current.get(key)
+    if (cached) {
+      setVenues(cached)
+      return
+    }
+    let cancelled = false
+    setVenues([])
+    fetch(`/api/venues?lat=${latLng.lat}&lng=${latLng.lng}`)
+      .then((res) => (res.ok ? res.json() : { venues: [] }))
+      .then((data) => {
+        const list: Venue[] = Array.isArray(data?.venues) ? data.venues : []
+        cache.current.set(key, list)
+        if (!cancelled) setVenues(list)
+      })
+      .catch(() => {
+        if (!cancelled) setVenues([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [latLng.lat, latLng.lng])
+
+  if (venues.length === 0) return null
+
+  return (
+    <section className="animate-fade-up">
+      <p className="text-xs font-semibold uppercase tracking-widest text-text-secondary text-center mb-3">
+        Where to go in {placeName}
+      </p>
+      <div className="space-y-2.5">
+        {venues.slice(0, 3).map((v, i) => (
+          <div
+            key={v.name}
+            className="animate-fade-up bg-surface rounded-2xl shadow-card px-4 py-3.5 sm:px-5 flex items-center justify-between gap-3"
+            style={{ animationDelay: `${80 + i * 90}ms` }}
+          >
+            <div className="min-w-0">
+              <p className="font-semibold text-text-primary truncate">{v.name}</p>
+              <p className="text-sm text-text-secondary">{v.type}</p>
+            </div>
+            <span className="shrink-0 text-sm text-text-secondary font-medium">
+              {v.walkingMinutes} min walk
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -89,6 +145,9 @@ export default function ResultView({ result }: ResultViewProps) {
           ))}
         </div>
       </section>
+
+      {/* Venues — only rendered when the venue source answered */}
+      <VenueList latLng={winner.latLng} placeName={winner.name} />
     </div>
   )
 }
