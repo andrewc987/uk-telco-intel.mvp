@@ -27,3 +27,6 @@ No Google key and no appetite for a heavy map library tonight: the result screen
 
 ## D4 — Deploy = push `main`
 No Vercel CLI/token in the container; the project deploys via git integration with production tracking `main`. Per the spec's explicit clearance to deploy to production throughout, each phase is committed on the working branch and merged to `main` to deploy, then verified against the live URL.
+
+## D9 — Venue source: Overpass (OpenStreetMap) as the live keyless path; mock venues deleted
+No Google key in this env, and the old keyless fallback returned five hard-coded fake venues — fabrication, banned. `/api/venues` now queries Overpass (free, no key) for named `amenity=pub|bar|cafe|restaurant` nodes/ways within 400m of the meet point, dedupes by name, biases pubs/bars first (evening product), and labels each with a straight-line walking estimate (5 km/h) — honest because it's a distance-to-venue label, not a journey time. 8s timeout; any failure returns an empty list and the result screen simply doesn't render the "Where to go" section — the recommendation stands on its own. The Google Places path is kept and takes over automatically when `GOOGLE_MAPS_API_KEY` exists, falling back to Overpass if it returns nothing.

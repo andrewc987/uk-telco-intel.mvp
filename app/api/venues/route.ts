@@ -1,73 +1,129 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Venue } from '@/lib/types'
+
+// Venue layer. Two sources behind one shape:
+// - Google Places when GOOGLE_MAPS_API_KEY exists (not in this env yet)
+// - Overpass (OpenStreetMap) as the live keyless path
+// On any failure: empty list. The meet-point recommendation never depends on this.
+
+const WALK_KMH = 5
 
 export async function GET(request: NextRequest) {
-  const lat = request.nextUrl.searchParams.get('lat')
-  const lng = request.nextUrl.searchParams.get('lng')
+  const lat = parseFloat(request.nextUrl.searchParams.get('lat') || '')
+  const lng = parseFloat(request.nextUrl.searchParams.get('lng') || '')
 
-  if (!lat || !lng) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return NextResponse.json({ error: 'Missing lat/lng parameters' }, { status: 400 })
   }
 
   const apiKey = process.env.GOOGLE_MAPS_API_KEY
-  if (!apiKey) {
-    // Return mock venues when no API key is configured
-    return NextResponse.json({
-      venues: getMockVenues(parseFloat(lat), parseFloat(lng)),
-    })
+  if (apiKey) {
+    const venues = await googleVenues(lat, lng, apiKey)
+    if (venues.length > 0) return NextResponse.json({ venues })
+    // fall through to Overpass if Google gave nothing
   }
 
+  const venues = await overpassVenues(lat, lng)
+  return NextResponse.json({ venues })
+}
+
+// Evening bias: pubs and bars first, then restaurants, then cafés.
+const TYPE_RANK: Record<string, number> = { pub: 0, bar: 1, restaurant: 2, cafe: 3 }
+const TYPE_LABEL: Record<string, string> = { pub: 'Pub', bar: 'Bar', restaurant: 'Restaurant', cafe: 'Café' }
+
+async function overpassVenues(lat: number, lng: number): Promise<Venue[]> {
+  const query = `[out:json][timeout:8];(node["amenity"~"^(pub|bar|cafe|restaurant)$"]["name"](around:400,${lat},${lng});way["amenity"~"^(pub|bar|cafe|restaurant)$"]["name"](around:400,${lat},${lng}););out center 60;`
+
+  try {
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'HALFPOINT/1.0 (meet-point app)',
+      },
+      body: `data=${encodeURIComponent(query)}`,
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) return []
+
+    const data = await res.json()
+    const elements: Array<{
+      lat?: number
+      lon?: number
+      center?: { lat: number; lon: number }
+      tags?: Record<string, string>
+    }> = data.elements || []
+
+    const seen = new Set<string>()
+    const venues: Venue[] = []
+    for (const el of elements) {
+      const tags = el.tags
+      const name = tags?.name
+      const type = tags?.amenity
+      const vLat = el.lat ?? el.center?.lat
+      const vLng = el.lon ?? el.center?.lon
+      if (!name || !type || vLat === undefined || vLng === undefined) continue
+      const key = name.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      venues.push({
+        name,
+        type,
+        walkingMinutes: Math.max(
+          1,
+          Math.round((haversineKm({ lat, lng }, { lat: vLat, lng: vLng }) / WALK_KMH) * 60)
+        ),
+      })
+    }
+
+    venues.sort(
+      (a, b) => (TYPE_RANK[a.type] ?? 9) - (TYPE_RANK[b.type] ?? 9) || a.walkingMinutes - b.walkingMinutes
+    )
+    return venues.slice(0, 5).map((v) => ({ ...v, type: TYPE_LABEL[v.type] || v.type }))
+  } catch {
+    return []
+  }
+}
+
+async function googleVenues(lat: number, lng: number, apiKey: string): Promise<Venue[]> {
   try {
     const types = ['bar', 'restaurant', 'pub']
-    const allVenues: Array<{
-      name: string
-      type: string
-      rating: number
-      address: string
-      walkingMinutes: number
-      googlePlacesId: string
-    }> = []
+    const collected: Array<Venue & { rating: number }> = []
 
     for (const type of types) {
       const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=400&type=${type}&key=${apiKey}`
       const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
-
-      if (res.ok) {
-        const data = await res.json()
-        const results = data.results || []
-
-        for (const place of results.slice(0, 3)) {
-          allVenues.push({
-            name: place.name,
-            type,
-            rating: place.rating || 0,
-            address: place.vicinity || '',
-            walkingMinutes: Math.round(
+      if (!res.ok) continue
+      const data = await res.json()
+      for (const place of (data.results || []).slice(0, 3)) {
+        collected.push({
+          name: place.name,
+          type: TYPE_LABEL[type] || type,
+          rating: place.rating || 0,
+          walkingMinutes: Math.max(
+            1,
+            Math.round(
               (haversineKm(
-                { lat: parseFloat(lat), lng: parseFloat(lng) },
+                { lat, lng },
                 { lat: place.geometry.location.lat, lng: place.geometry.location.lng }
-              ) / 5) * 60
-            ),
-            googlePlacesId: place.place_id,
-          })
-        }
+              ) / WALK_KMH) * 60
+            )
+          ),
+        })
       }
     }
 
-    // Dedupe by name
     const seen = new Set<string>()
-    const unique = allVenues.filter((v) => {
-      if (seen.has(v.name)) return false
-      seen.add(v.name)
+    const unique = collected.filter((v) => {
+      const key = v.name.toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
       return true
     })
-
-    // Sort by rating, take top 5
     unique.sort((a, b) => b.rating - a.rating)
-
-    return NextResponse.json({ venues: unique.slice(0, 5) })
-  } catch (err) {
-    console.error('Venues error:', err)
-    return NextResponse.json({ venues: getMockVenues(parseFloat(lat), parseFloat(lng)) })
+    return unique.slice(0, 5).map(({ rating: _r, ...v }) => v)
+  } catch {
+    return []
   }
 }
 
@@ -77,16 +133,8 @@ function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: num
   const dLng = ((b.lng - a.lng) * Math.PI) / 180
   const sinDLat = Math.sin(dLat / 2)
   const sinDLng = Math.sin(dLng / 2)
-  const h = sinDLat * sinDLat + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * sinDLng * sinDLng
+  const h =
+    sinDLat * sinDLat +
+    Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * sinDLng * sinDLng
   return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
-}
-
-function getMockVenues(_lat: number, _lng: number) {
-  return [
-    { name: 'The Ten Bells', type: 'pub', rating: 4.4, address: 'Near station', walkingMinutes: 2, googlePlacesId: 'mock-1' },
-    { name: 'Dishoom', type: 'restaurant', rating: 4.5, address: 'Near station', walkingMinutes: 3, googlePlacesId: 'mock-2' },
-    { name: 'Bar Elba', type: 'bar', rating: 4.2, address: 'Near station', walkingMinutes: 4, googlePlacesId: 'mock-3' },
-    { name: 'The Anchor', type: 'pub', rating: 4.3, address: 'Near station', walkingMinutes: 2, googlePlacesId: 'mock-4' },
-    { name: 'Flat Iron', type: 'restaurant', rating: 4.4, address: 'Near station', walkingMinutes: 5, googlePlacesId: 'mock-5' },
-  ]
 }
