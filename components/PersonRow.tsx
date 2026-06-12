@@ -15,13 +15,19 @@ interface PersonRowProps {
 function useSuggestions() {
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([])
   const [open, setOpen] = useState(false)
+  const [active, setActive] = useState(-1)
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const close = () => {
+    setOpen(false)
+    setActive(-1)
+  }
 
   const query = (q: string) => {
     if (debounce.current) clearTimeout(debounce.current)
     if (q.trim().length < 2) {
       setSuggestions([])
-      setOpen(false)
+      close()
       return
     }
     debounce.current = setTimeout(async () => {
@@ -32,41 +38,131 @@ function useSuggestions() {
         const list: PlaceSuggestion[] = data.suggestions || []
         setSuggestions(list)
         setOpen(list.length > 0)
+        setActive(-1)
       } catch {
         /* leave previous suggestions */
       }
     }, 250)
   }
 
-  return { suggestions, open, setOpen, query }
+  return { suggestions, open, setOpen, active, setActive, close, query }
 }
 
-export default function PersonRow({ person, index, onUpdate, onRemove, canRemove }: PersonRowProps) {
-  const [showHome, setShowHome] = useState(Boolean(person.homeLocation))
-  const from = useSuggestions()
-  const home = useSuggestions()
-  const fromRef = useRef<HTMLDivElement>(null)
-  const homeRef = useRef<HTMLDivElement>(null)
+type Suggestions = ReturnType<typeof useSuggestions>
+
+// One forgiving autocomplete field: combobox input + listbox of options,
+// arrow keys/Enter/Escape all work, mouse still wins.
+function PlaceField({
+  id,
+  label,
+  placeholder,
+  value,
+  resolved,
+  state,
+  onChange,
+  onPick,
+}: {
+  id: string
+  label: string
+  placeholder: string
+  value: string
+  resolved: boolean
+  state: Suggestions
+  onChange: (v: string) => void
+  onPick: (s: PlaceSuggestion) => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (fromRef.current && !fromRef.current.contains(e.target as Node)) from.setOpen(false)
-      if (homeRef.current && !homeRef.current.contains(e.target as Node)) home.setOpen(false)
+      if (ref.current && !ref.current.contains(e.target as Node)) state.close()
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const pickFrom = (s: PlaceSuggestion) => {
-    from.setOpen(false)
-    onUpdate({ ...person, fromLocation: s.label, fromLatLng: s.latLng })
+  const pick = (s: PlaceSuggestion) => {
+    state.close()
+    onPick(s)
   }
 
-  const pickHome = (s: PlaceSuggestion) => {
-    home.setOpen(false)
-    onUpdate({ ...person, homeLocation: s.label, homeLatLng: s.latLng })
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!state.open || state.suggestions.length === 0) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      state.setActive((state.active + 1) % state.suggestions.length)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      state.setActive(state.active <= 0 ? state.suggestions.length - 1 : state.active - 1)
+    } else if (e.key === 'Enter') {
+      if (state.active >= 0) {
+        e.preventDefault()
+        pick(state.suggestions[state.active])
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      state.close()
+    }
   }
+
+  const listboxId = `${id}-listbox`
+
+  return (
+    <div className="relative" ref={ref}>
+      <input
+        type="text"
+        inputMode="text"
+        autoComplete="off"
+        id={id}
+        placeholder={placeholder}
+        aria-label={label}
+        role="combobox"
+        aria-expanded={state.open}
+        aria-controls={listboxId}
+        aria-autocomplete="list"
+        aria-activedescendant={state.active >= 0 ? `${id}-option-${state.active}` : undefined}
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value)
+          state.query(e.target.value)
+        }}
+        onKeyDown={onKeyDown}
+      />
+      {resolved && (
+        <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-success text-base" aria-hidden>
+          ✓
+        </span>
+      )}
+      {state.open && (
+        <div className="autocomplete-dropdown" role="listbox" id={listboxId} aria-label={`${label} suggestions`}>
+          {state.suggestions.map((s, i) => (
+            <div
+              key={i}
+              id={`${id}-option-${i}`}
+              role="option"
+              aria-selected={i === state.active}
+              className="autocomplete-item"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                pick(s)
+              }}
+              onMouseEnter={() => state.setActive(i)}
+            >
+              <span className="text-text-primary">{s.label}</span>
+              {s.sublabel && <span className="text-text-secondary ml-2 text-xs">{s.sublabel}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function PersonRow({ person, index, onUpdate, onRemove, canRemove }: PersonRowProps) {
+  const [showHome, setShowHome] = useState(Boolean(person.homeLocation))
+  const from = useSuggestions()
+  const home = useSuggestions()
 
   return (
     <div className="bg-surface rounded-2xl shadow-card p-4 sm:p-5">
@@ -74,7 +170,7 @@ export default function PersonRow({ person, index, onUpdate, onRemove, canRemove
         <input
           type="text"
           placeholder={`Person ${index + 1}`}
-          aria-label="Name"
+          aria-label={`Person ${index + 1} name`}
           value={person.name}
           maxLength={20}
           onChange={(e) => onUpdate({ ...person, name: e.target.value })}
@@ -93,35 +189,16 @@ export default function PersonRow({ person, index, onUpdate, onRemove, canRemove
         )}
       </div>
 
-      <div className="relative" ref={fromRef}>
-        <input
-          type="text"
-          inputMode="text"
-          autoComplete="off"
-          placeholder="Postcode or place"
-          aria-label="Starting from"
-          value={person.fromLocation}
-          onChange={(e) => {
-            onUpdate({ ...person, fromLocation: e.target.value, fromLatLng: null })
-            from.query(e.target.value)
-          }}
-        />
-        {person.fromLatLng && (
-          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-success text-base" aria-hidden>
-            ✓
-          </span>
-        )}
-        {from.open && (
-          <div className="autocomplete-dropdown">
-            {from.suggestions.map((s, i) => (
-              <div key={i} className="autocomplete-item" onClick={() => pickFrom(s)}>
-                <span className="text-text-primary">{s.label}</span>
-                {s.sublabel && <span className="text-text-secondary ml-2 text-xs">{s.sublabel}</span>}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <PlaceField
+        id={`${person.id}-from`}
+        label={`Person ${index + 1} starting from`}
+        placeholder="Postcode or place"
+        value={person.fromLocation}
+        resolved={Boolean(person.fromLatLng)}
+        state={from}
+        onChange={(v) => onUpdate({ ...person, fromLocation: v, fromLatLng: null })}
+        onPick={(s) => onUpdate({ ...person, fromLocation: s.label, fromLatLng: s.latLng })}
+      />
 
       {!showHome ? (
         <button
@@ -131,33 +208,17 @@ export default function PersonRow({ person, index, onUpdate, onRemove, canRemove
           + heading home to somewhere else
         </button>
       ) : (
-        <div className="relative mt-2.5" ref={homeRef}>
-          <input
-            type="text"
-            autoComplete="off"
+        <div className="mt-2.5">
+          <PlaceField
+            id={`${person.id}-home`}
+            label={`Person ${index + 1} heading home to`}
             placeholder="Home postcode or station"
-            aria-label="Heading home to"
             value={person.homeLocation}
-            onChange={(e) => {
-              onUpdate({ ...person, homeLocation: e.target.value, homeLatLng: null })
-              home.query(e.target.value)
-            }}
+            resolved={Boolean(person.homeLatLng)}
+            state={home}
+            onChange={(v) => onUpdate({ ...person, homeLocation: v, homeLatLng: null })}
+            onPick={(s) => onUpdate({ ...person, homeLocation: s.label, homeLatLng: s.latLng })}
           />
-          {person.homeLatLng && (
-            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-success text-base" aria-hidden>
-              ✓
-            </span>
-          )}
-          {home.open && (
-            <div className="autocomplete-dropdown">
-              {home.suggestions.map((s, i) => (
-                <div key={i} className="autocomplete-item" onClick={() => pickHome(s)}>
-                  <span className="text-text-primary">{s.label}</span>
-                  {s.sublabel && <span className="text-text-secondary ml-2 text-xs">{s.sublabel}</span>}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </div>

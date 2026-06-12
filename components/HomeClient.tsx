@@ -19,19 +19,28 @@ function LoadingState() {
     return () => clearInterval(t)
   }, [])
   return (
-    <section className="animate-fade-up text-center py-10">
-      <div className="inline-flex gap-1.5 mb-4" aria-hidden>
-        {[0, 1, 2].map((i) => (
-          <span
-            key={i}
-            className="w-2 h-2 rounded-full bg-accent animate-pulse"
-            style={{ animationDelay: `${i * 200}ms` }}
-          />
+    <section className="animate-fade-up text-center py-8 min-h-[148px]">
+      <div className="progress-hairline mb-6" aria-hidden />
+      <ul className="inline-flex flex-col items-start gap-1.5 text-left" aria-live="polite">
+        {LOADING_STAGES.map((line, i) => (
+          <li
+            key={line}
+            className={`text-sm flex items-center gap-2 transition-opacity duration-500 ${
+              i < stage
+                ? 'text-text-secondary'
+                : i === stage
+                  ? 'text-text-secondary'
+                  : 'text-text-secondary/0 select-none'
+            }`}
+          >
+            <span className={`text-success text-xs w-3 transition-opacity duration-500 ${i < stage ? 'opacity-100' : 'opacity-0'}`} aria-hidden>
+              ✓
+            </span>
+            {line}
+            {i === stage ? '…' : ''}
+          </li>
         ))}
-      </div>
-      <p className="text-sm text-text-secondary" aria-live="polite">
-        {LOADING_STAGES[stage]}…
-      </p>
+      </ul>
     </section>
   )
 }
@@ -199,7 +208,7 @@ export default function HomeClient() {
       {/* Error */}
       {error && (
         <section className="animate-fade-up mb-8">
-          <div className="bg-warning/8 border border-warning/20 rounded-xl px-4 py-3 text-center">
+          <div className="bg-warning/8 border border-warning/20 rounded-xl px-4 py-3 text-center" role="alert">
             <p className="text-sm text-warning font-medium">{error}</p>
           </div>
         </section>
@@ -210,15 +219,14 @@ export default function HomeClient() {
 
       {/* Results */}
       {result && !loading && (
-        <div className="space-y-6">
-          <ResultView result={result} />
-          <section className="flex justify-center pt-2 pb-6 px-2">
+        <ResultView result={result}>
+          <section className="flex justify-center pt-2 pb-4 px-2">
             <ShareButton getShareUrl={getShareUrl} placeName={result.fairest.name} />
           </section>
-        </div>
+        </ResultView>
       )}
 
-      <footer className="text-center text-sm text-text-secondary/50 py-6 border-t border-border mt-10">
+      <footer className="text-center text-sm text-text-secondary py-6 border-t border-border mt-10">
         HALF·POINT — London, {new Date().getFullYear()}
       </footer>
     </main>

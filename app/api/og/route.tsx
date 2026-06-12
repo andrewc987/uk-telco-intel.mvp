@@ -5,7 +5,7 @@ export const runtime = 'edge'
 
 // Dynamic OG card for a shared result. Matches the app's light Apple-style
 // palette (globals.css / tailwind.config): #FAFAFA bg, #1D1D1F text,
-// #86868B secondary, #007AFF accent, system sans.
+// #6E6E73 secondary, #0066CC accent, system sans.
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
             color: '#1D1D1F',
           }}
         >
-          HALF<span style={{ color: '#007AFF', margin: '0 2px' }}>·</span>POINT
+          HALF<span style={{ color: '#0066CC', margin: '0 2px' }}>·</span>POINT
         </div>
 
         {/* Place */}
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
               fontWeight: 600,
               letterSpacing: 5,
               textTransform: 'uppercase',
-              color: '#86868B',
+              color: '#6E6E73',
               marginBottom: 14,
             }}
           >
@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
                   }}
                 >
                   <span style={{ fontWeight: 600, color: '#1D1D1F' }}>{p.name}</span>
-                  <span style={{ color: '#007AFF', fontWeight: 700, marginLeft: 12 }}>
+                  <span style={{ color: '#0066CC', fontWeight: 700, marginLeft: 12 }}>
                     {p.minutes} min
                   </span>
                 </div>
@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
             style={{
               display: 'flex',
               fontSize: 28,
-              color: '#86868B',
+              color: '#6E6E73',
               lineHeight: 1.4,
             }}
           >

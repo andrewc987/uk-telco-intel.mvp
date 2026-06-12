@@ -39,6 +39,17 @@ Commits `f4a731f` (venues), `9c9f6d6` (share/OG) — merged to `main`, deployed.
 - `/api/og` → 200 `image/png` 1200×630; vision-checked the rendered card (wordmark, "MEET AT Westminster", per-person time pills Ana 33 / Ben 36 / Cam 32 / Dee 25, diff sentence). OG param format: repeated `p=Name|minutes`.
 - Share URL (`/?s=...`) returns 200 and re-runs the engine on open so results reproduce with fresh real times.
 
+## Phases 7–8 — Copy + last-train ✅ (deployed; live-verified with one known flake)
+
+Commits `e897c4b` (copy), `7464af1` (last-train) — merged to `main`, deployed.
+
+**Live verification (production, this session):**
+- New copy live (hero/description "blame the algorithm" confirmed).
+- Last-train, 2-person group with home CO1: Liz's leg returned `{terminal: Liverpool Street, destination: Colchester, trainTime: 23:30, toTerminalMinutes: 13 (real TfL), leaveBy: 23:12}` ✓.
+- **Known flake:** on 4-person runs the terminal legs fire after ~60 anonymous TfL calls and can get rate-limited; the engine then honestly omits the constraint (never invents a time), so the last-train line can be missing under load. Direct TfL Westminster→Liverpool St verified fine (29 min) — it's throttling, not logic. Fix queued: retry/backoff on terminal legs; proper fix is a free `TFL_APP_KEY` (hand-back below).
+- Last-train table spot-checked against published timetables; two entries corrected (Paddington→Reading was wrong in the dangerous direction).
+
 ## Hand back to Andrew
+- **Add a free `TFL_APP_KEY`** (api.tfl.gov.uk portal) to Vercel env — removes anonymous rate-limiting that can suppress the last-train line on big groups.
 - `GOOGLE_MAPS_API_KEY` is not available in this execution container. Add it to the container env (or confirm it in Vercel Production env) to activate the Google provider. Tonight's build runs on TfL + postcodes.io (free, real journey times) behind the same provider interface — no fabricated times.
 - Vercel project rename off `uk-telco-intel-mvp` slug + domain/DNS — settings changes only Andrew can make.

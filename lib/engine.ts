@@ -178,10 +178,16 @@ export async function optimise(
     const terminalLegs = await mapWithConcurrency(terminalPairs, CONCURRENCY, async ({ candidate, c }) => {
       // A candidate that IS the terminal (e.g. meeting at Victoria, train from
       // Victoria) is a real 0-minute leg — TfL refuses zero-length journeys.
-      const journey =
-        distSq(candidate.latLng, c.terminal.latLng) < 5e-6 // ~250 m
-          ? ({ ok: true, minutes: 0, route: '' } as const)
-          : await tflJourneys.journeyTime(candidate.latLng, c.terminal.latLng, departureTime)
+      if (distSq(candidate.latLng, c.terminal.latLng) < 5e-6 /* ~250 m */) {
+        return { candidate, c, journey: { ok: true, minutes: 0, route: '' } as const }
+      }
+      let journey = await tflJourneys.journeyTime(candidate.latLng, c.terminal.latLng, departureTime)
+      if (!journey.ok) {
+        // Terminal legs fire after the main matrix and are the first casualties of
+        // TfL's anonymous rate limit — one paced retry rescues most of them.
+        await new Promise((r) => setTimeout(r, 1500))
+        journey = await tflJourneys.journeyTime(candidate.latLng, c.terminal.latLng, departureTime)
+      }
       return { candidate, c, journey }
     })
 

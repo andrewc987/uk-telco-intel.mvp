@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, ReactNode } from 'react'
 import { OptimiseResponse, ScoredCandidate, Venue } from '@/lib/types'
 import MiniMap from './MiniMap'
 
@@ -8,13 +8,22 @@ type Mode = 'fairest' | 'quickest'
 
 interface ResultViewProps {
   result: OptimiseResponse
+  children?: ReactNode
 }
 
-function JourneyLeg({ leg, index }: { leg: ScoredCandidate['legs'][number]; index: number }) {
+function JourneyLeg({
+  leg,
+  index,
+  firstReveal,
+}: {
+  leg: ScoredCandidate['legs'][number]
+  index: number
+  firstReveal: boolean
+}) {
   return (
     <div
-      className="animate-fade-up bg-surface rounded-2xl shadow-card p-4 sm:p-5 flex items-start justify-between gap-3"
-      style={{ animationDelay: `${100 + index * 90}ms` }}
+      className={`${firstReveal ? 'animate-fade-up' : 'animate-crossfade'} bg-surface rounded-2xl shadow-card p-4 sm:p-5 flex items-start justify-between gap-3`}
+      style={{ animationDelay: firstReveal ? `${450 + index * 90}ms` : `${index * 40}ms` }}
     >
       <div className="min-w-0">
         <p className="font-semibold text-text-primary mb-0.5">{leg.personName}</p>
@@ -97,35 +106,57 @@ function VenueList({ latLng, placeName }: { latLng: { lat: number; lng: number }
   )
 }
 
-export default function ResultView({ result }: ResultViewProps) {
+export default function ResultView({ result, children }: ResultViewProps) {
   const [mode, setMode] = useState<Mode>('fairest')
+  // First reveal is staged (headline → diff → map → cards); a mode toggle
+  // afterwards crossfades the numbers instead of replaying the theatre.
+  const [firstReveal, setFirstReveal] = useState(true)
   const winner = mode === 'fairest' ? result.fairest : result.quickest
+
+  useEffect(() => {
+    setMode('fairest')
+    setFirstReveal(true)
+  }, [result])
+
+  const switchMode = (m: Mode) => {
+    if (m === mode) return
+    setFirstReveal(false)
+    setMode(m)
+  }
 
   return (
     <div className="space-y-6">
       {/* Headline */}
-      <section className="animate-fade-up text-center">
-        <p className="text-xs font-semibold uppercase tracking-widest text-text-secondary mb-2">
-          {mode === 'fairest' ? 'Fairest for everyone' : 'Quickest for the group'}
-        </p>
-        <h2 className="font-display text-4xl sm:text-5xl font-bold text-text-primary tracking-tight mb-4">
-          {winner.name}
-        </h2>
-        <p className="text-base sm:text-lg text-text-secondary leading-relaxed max-w-md mx-auto">
+      <section className="text-center">
+        <div key={mode} className={firstReveal ? 'animate-fade-up' : 'animate-crossfade'}>
+          <p className="text-xs font-semibold uppercase tracking-widest text-text-secondary mb-2">
+            {mode === 'fairest' ? 'Fairest for everyone' : 'Quickest for the group'}
+          </p>
+          <h2 className="font-display text-4xl sm:text-5xl font-bold text-text-primary tracking-tight">
+            {winner.name}
+          </h2>
+        </div>
+        <p
+          className={`${firstReveal ? 'animate-fade-up' : ''} mt-4 text-base sm:text-lg text-text-secondary leading-relaxed max-w-md mx-auto`}
+          style={firstReveal ? { animationDelay: '150ms' } : undefined}
+        >
           {result.diff}
         </p>
       </section>
 
       {/* Mode toggle — both precomputed, switching is instant */}
       {!result.agree && (
-        <section className="animate-fade-up flex justify-center">
-          <div className="inline-flex bg-surface rounded-full shadow-card p-1" role="tablist" aria-label="Mode">
+        <section
+          className={`${firstReveal ? 'animate-fade-up' : ''} flex justify-center`}
+          style={firstReveal ? { animationDelay: '250ms' } : undefined}
+        >
+          <div className="inline-flex bg-surface rounded-full shadow-card p-1" role="group" aria-label="Ranking mode">
             {(['fairest', 'quickest'] as Mode[]).map((m) => (
               <button
                 key={m}
-                role="tab"
-                aria-selected={mode === m}
-                onClick={() => setMode(m)}
+                type="button"
+                aria-pressed={mode === m}
+                onClick={() => switchMode(m)}
                 className={`px-5 py-2 rounded-full text-sm font-semibold transition-colors ${
                   mode === m ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'
                 }`}
@@ -138,21 +169,30 @@ export default function ResultView({ result }: ResultViewProps) {
       )}
 
       {/* Map */}
-      <section className="animate-fade-up">
-        <MiniMap
-          origins={result.origins.map((o) => ({ name: o.name, latLng: o.latLng }))}
-          destination={{ name: winner.name, latLng: winner.latLng }}
-        />
+      <section
+        className={firstReveal ? 'animate-fade-up' : undefined}
+        style={firstReveal ? { animationDelay: '320ms' } : undefined}
+      >
+        <div key={mode} className={firstReveal ? undefined : 'animate-crossfade'}>
+          <MiniMap
+            origins={result.origins.map((o) => ({ name: o.name, latLng: o.latLng }))}
+            destination={{ name: winner.name, latLng: winner.latLng }}
+          />
+        </div>
       </section>
 
       {/* Per-person journeys */}
       <section>
         <div className="space-y-2.5">
           {winner.legs.map((leg, i) => (
-            <JourneyLeg key={`${mode}-${leg.personId}`} leg={leg} index={i} />
+            <JourneyLeg key={`${mode}-${leg.personId}`} leg={leg} index={i} firstReveal={firstReveal} />
           ))}
         </div>
       </section>
+
+      {/* Share CTA sits above the venues so late-arriving venue cards
+          append below it — nothing already on screen shifts. */}
+      {children}
 
       {/* Venues — only rendered when the venue source answered */}
       <VenueList latLng={winner.latLng} placeName={winner.name} />

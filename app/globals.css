@@ -6,11 +6,11 @@
   --color-bg: #FAFAFA;
   --color-surface: #FFFFFF;
   --color-border: #E5E5E5;
-  --color-accent: #007AFF;
+  --color-accent: #0066CC;
   --color-accent-light: #E8F2FF;
   --color-text-primary: #1D1D1F;
-  --color-text-secondary: #86868B;
-  --color-warning: #FF6B35;
+  --color-text-secondary: #6E6E73;
+  --color-warning: #C2410C;
   --color-success: #34C759;
 }
 
@@ -81,6 +81,92 @@ body {
 .reveal-4 { animation-delay: 450ms; }
 .reveal-5 { animation-delay: 600ms; }
 
+/* Mode-toggle crossfade: numbers fade through, no snap, no movement */
+@keyframes crossfade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-crossfade {
+  animation: crossfade 0.28s ease forwards;
+  opacity: 0;
+}
+
+/* MiniMap staged entrance */
+@keyframes mapFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes mapWinner {
+  0% { opacity: 0; transform: scale(0.7); }
+  70% { opacity: 1; transform: scale(1.06); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.map-fade {
+  animation: mapFade 0.5s ease forwards;
+  opacity: 0;
+}
+
+.map-winner {
+  animation: mapWinner 0.45s cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
+  opacity: 0;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+/* Loading: calm indeterminate hairline */
+@keyframes hairline {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
+.progress-hairline {
+  position: relative;
+  height: 2px;
+  width: 100%;
+  max-width: 220px;
+  margin: 0 auto;
+  border-radius: 1px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.progress-hairline::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: 1px;
+  background: var(--color-accent);
+  animation: hairline 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+/* Restraint for people who asked for it */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .animate-fade-up,
+  .animate-slide-in,
+  .animate-crossfade,
+  .map-fade,
+  .map-winner {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .progress-hairline::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.4;
+  }
+  .btn-lift:hover {
+    transform: none;
+  }
+}
+
 /* Input styles */
 input[type="text"],
 input[type="time"] {
@@ -99,7 +185,16 @@ input[type="time"] {
 input[type="text"]:focus,
 input[type="time"]:focus {
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.12);
+}
+
+/* Visible keyboard focus everywhere */
+button:focus-visible,
+a:focus-visible,
+[role='option']:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
 input[type="text"]::placeholder {
@@ -149,6 +244,7 @@ input[type="text"]::placeholder {
   font-size: 0.875rem;
 }
 
-.autocomplete-item:hover {
+.autocomplete-item:hover,
+.autocomplete-item[aria-selected='true'] {
   background: var(--color-accent-light);
 }
