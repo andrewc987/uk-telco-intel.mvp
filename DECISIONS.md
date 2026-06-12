@@ -19,5 +19,11 @@ Candidates are pruned to the 13 nearest the group centroid plus each person's si
 ## D6 — Place search: TfL StopPoint + postcodes.io behind one PlaceSearchProvider
 `/api/places` merges TfL StopPoint search (stations, with lat/lng) and postcodes.io autocomplete (bulk-resolved to coords). Postcode-looking queries rank postcodes first; everything else ranks stations first. Max 6 suggestions, deduped by label. Google Places drops into the same `PlaceSearchProvider` interface when the key exists.
 
+## D7 — Map is a dependency-free SVG minimap
+No Google key and no appetite for a heavy map library tonight: the result screen plots people's origins and the winner on an inline SVG scaled to the group's lat/lng bounding box — dashed convergence lines, labelled dots, on-voice and weightless. Swappable for a real map (Google JS / MapLibre) behind the same component boundary later.
+
+## D8 — Both modes precomputed; venue UI parked
+`/api/optimise` returns Fairest and Quickest winners (plus top-5 ranked and per-person legs for each) in one response, so the result-screen toggle is instant with no refetch. The venue layer is a later phase: `/api/venues` is kept working as-is, but the result screen doesn't render venues yet.
+
 ## D4 — Deploy = push `main`
 No Vercel CLI/token in the container; the project deploys via git integration with production tracking `main`. Per the spec's explicit clearance to deploy to production throughout, each phase is committed on the working branch and merged to `main` to deploy, then verified against the live URL.

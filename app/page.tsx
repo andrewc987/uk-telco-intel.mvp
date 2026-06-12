@@ -3,7 +3,38 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Person, OptimiseResponse } from '@/lib/types'
 import PersonRow from '@/components/PersonRow'
+import ResultView from '@/components/ResultView'
 import ShareButton from '@/components/ShareButton'
+
+const LOADING_STAGES = [
+  'Pulling real journey times from TfL',
+  'Scoring every spot two ways',
+  'Making sure nobody gets shafted',
+]
+
+function LoadingState() {
+  const [stage, setStage] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setStage((s) => Math.min(s + 1, LOADING_STAGES.length - 1)), 2600)
+    return () => clearInterval(t)
+  }, [])
+  return (
+    <section className="animate-fade-up text-center py-10">
+      <div className="inline-flex gap-1.5 mb-4" aria-hidden>
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="w-2 h-2 rounded-full bg-accent animate-pulse"
+            style={{ animationDelay: `${i * 200}ms` }}
+          />
+        ))}
+      </div>
+      <p className="text-sm text-text-secondary" aria-live="polite">
+        {LOADING_STAGES[stage]}…
+      </p>
+    </section>
+  )
+}
 
 function createPerson(): Person {
   return {
@@ -157,33 +188,14 @@ export default function HomePage() {
         </section>
       )}
 
+      {/* Loading */}
+      {loading && <LoadingState />}
+
       {/* Results */}
-      {result && (
-        <div className="space-y-5">
-          <section className="text-center">
-            <h2 className="font-display text-3xl sm:text-4xl font-bold text-text-primary tracking-tight mb-3">
-              {result.fairest.name}
-            </h2>
-            <p className="text-base text-text-secondary max-w-md mx-auto">{result.diff}</p>
-          </section>
-
-          <section className="space-y-2.5">
-            {result.fairest.legs.map((leg) => (
-              <div key={leg.personId} className="bg-surface rounded-2xl shadow-card p-4 flex items-center justify-between">
-                <div>
-                  <p className="font-semibold text-text-primary">{leg.personName}</p>
-                  <p className="text-sm text-text-secondary">{leg.ok ? leg.route : "Couldn't plan this leg"}</p>
-                </div>
-                {leg.ok && (
-                  <span className="bg-accent text-white text-sm font-semibold px-3 py-0.5 rounded-full">
-                    {leg.minutes} min
-                  </span>
-                )}
-              </div>
-            ))}
-          </section>
-
-          <section className="flex justify-center pt-4 pb-6">
+      {result && !loading && (
+        <div className="space-y-6">
+          <ResultView result={result} />
+          <section className="flex justify-center pt-2 pb-6">
             <ShareButton getShareUrl={getShareUrl} />
           </section>
         </div>
