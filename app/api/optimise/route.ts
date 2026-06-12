@@ -3,6 +3,9 @@ import { optimise, EnginePerson } from '@/lib/engine'
 import { Person } from '@/lib/types'
 import { getPostcodeOutward, lookupTerminal } from '@/lib/terminals'
 
+// Big groups + terminal-leg retries can exceed Vercel's default function window.
+export const maxDuration = 60
+
 // "Heading home to" only becomes a last-train constraint when it resolves to a
 // known out-of-London terminal — i.e. the home field looks like a postcode
 // whose outward code is in the curated table. Londoners: nothing changes.

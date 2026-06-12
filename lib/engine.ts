@@ -181,11 +181,13 @@ export async function optimise(
       if (distSq(candidate.latLng, c.terminal.latLng) < 5e-6 /* ~250 m */) {
         return { candidate, c, journey: { ok: true, minutes: 0, route: '' } as const }
       }
+      // Terminal legs fire after the main matrix and are the first casualties of
+      // TfL's anonymous rate limit (worst on shared serverless egress IPs) —
+      // paced retries rescue most of them. TFL_APP_KEY removes the problem.
       let journey = await tflJourneys.journeyTime(candidate.latLng, c.terminal.latLng, departureTime)
-      if (!journey.ok) {
-        // Terminal legs fire after the main matrix and are the first casualties of
-        // TfL's anonymous rate limit — one paced retry rescues most of them.
-        await new Promise((r) => setTimeout(r, 1500))
+      for (const delay of [2500, 6000]) {
+        if (journey.ok) break
+        await new Promise((r) => setTimeout(r, delay))
         journey = await tflJourneys.journeyTime(candidate.latLng, c.terminal.latLng, departureTime)
       }
       return { candidate, c, journey }
