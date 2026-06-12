@@ -19,9 +19,17 @@ function JourneyLeg({ leg, index }: { leg: ScoredCandidate['legs'][number]; inde
       <div className="min-w-0">
         <p className="font-semibold text-text-primary mb-0.5">{leg.personName}</p>
         {leg.ok ? (
-          <p className="text-sm text-text-secondary leading-relaxed">{leg.route}</p>
+          <>
+            <p className="text-sm text-text-secondary leading-relaxed">{leg.route}</p>
+            {leg.lastTrain && (
+              <p className="text-sm text-accent font-medium mt-1.5">
+                Makes the {leg.lastTrain.trainTime} to {leg.lastTrain.destination} from {leg.lastTrain.terminal} —
+                leave by {leg.lastTrain.leaveBy}.
+              </p>
+            )}
+          </>
         ) : (
-          <p className="text-sm text-warning">Couldn&apos;t plan this leg — journey data didn&apos;t answer.</p>
+          <p className="text-sm text-warning">TfL couldn&apos;t plan {leg.personName}&apos;s leg. Not our doing.</p>
         )}
       </div>
       {leg.ok && (

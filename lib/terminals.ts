@@ -255,7 +255,7 @@ export const TERMINAL_LOOKUP: Record<string, Terminal> = {
     postcode: 'SW1V 1JU',
     latLng: { lat: 51.4952, lng: -0.1441 },
     lastTrains: [
-      { destination: 'Brighton', departureTime: '23:32', daysOfWeek: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
+      { destination: 'Brighton', departureTime: '23:52', daysOfWeek: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
       { destination: 'Brighton', departureTime: '23:02', daysOfWeek: ['Sat'] },
       { destination: 'Brighton', departureTime: '22:32', daysOfWeek: ['Sun'] },
     ],
@@ -265,7 +265,7 @@ export const TERMINAL_LOOKUP: Record<string, Terminal> = {
     postcode: 'SW1V 1JU',
     latLng: { lat: 51.4952, lng: -0.1441 },
     lastTrains: [
-      { destination: 'Brighton', departureTime: '23:32', daysOfWeek: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
+      { destination: 'Brighton', departureTime: '23:52', daysOfWeek: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
       { destination: 'Brighton', departureTime: '23:02', daysOfWeek: ['Sat'] },
       { destination: 'Brighton', departureTime: '22:32', daysOfWeek: ['Sun'] },
     ],
@@ -317,8 +317,8 @@ export const TERMINAL_LOOKUP: Record<string, Terminal> = {
     postcode: 'W2 1HQ',
     latLng: { lat: 51.5154, lng: -0.1755 },
     lastTrains: [
-      { destination: 'Reading', departureTime: '23:48', daysOfWeek: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
-      { destination: 'Reading', departureTime: '23:18', daysOfWeek: ['Sat'] },
+      { destination: 'Reading', departureTime: '23:38', daysOfWeek: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
+      { destination: 'Reading', departureTime: '23:08', daysOfWeek: ['Sat'] },
       { destination: 'Reading', departureTime: '22:48', daysOfWeek: ['Sun'] },
     ],
   },
@@ -327,8 +327,8 @@ export const TERMINAL_LOOKUP: Record<string, Terminal> = {
     postcode: 'W2 1HQ',
     latLng: { lat: 51.5154, lng: -0.1755 },
     lastTrains: [
-      { destination: 'Reading', departureTime: '23:48', daysOfWeek: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
-      { destination: 'Reading', departureTime: '23:18', daysOfWeek: ['Sat'] },
+      { destination: 'Reading', departureTime: '23:38', daysOfWeek: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
+      { destination: 'Reading', departureTime: '23:08', daysOfWeek: ['Sat'] },
       { destination: 'Reading', departureTime: '22:48', daysOfWeek: ['Sun'] },
     ],
   },

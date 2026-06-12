@@ -4,10 +4,10 @@ import './globals.css'
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://uk-telco-intel-mvp.vercel.app'),
   title: 'HALF·POINT — The fairest place to meet in London',
-  description: 'Multi-person. Multi-modal. Last-train-aware. Find the genuinely fairest place for your group to meet in London.',
+  description: 'Find the fairest place to meet. Then blame the algorithm. Multi-person. Multi-modal. Last-train-aware.',
   openGraph: {
     title: 'HALF·POINT — The fairest place to meet in London',
-    description: 'Multi-person. Multi-modal. Last-train-aware.',
+    description: 'Find the fairest place to meet. Then blame the algorithm.',
     images: ['/og-image.png'],
   },
 }

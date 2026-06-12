@@ -8,7 +8,7 @@ import ShareButton from '@/components/ShareButton'
 
 const LOADING_STAGES = [
   'Pulling real journey times from TfL',
-  'Scoring every spot two ways',
+  'Scoring every contender, both ways',
   'Making sure nobody gets shafted',
 ]
 
@@ -119,7 +119,7 @@ export default function HomeClient() {
 
     const resolved = group.filter((p) => p.fromLatLng)
     if (resolved.length < 2) {
-      setError('Pick a starting point from the suggestions for at least two people.')
+      setError('Two starting points minimum — pick them from the suggestions.')
       return
     }
 
@@ -135,14 +135,14 @@ export default function HomeClient() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => null)
-        setError(data?.error || 'Something went wrong.')
+        setError(data?.error || "The engine didn't answer. Run it again.")
         return
       }
 
       const data: OptimiseResponse = await res.json()
       setResult(data)
     } catch {
-      setError("Couldn't find a fair spot. Try different locations.")
+      setError("Couldn't reach the journey planner. Try again in a minute.")
     } finally {
       setLoading(false)
     }
@@ -180,7 +180,7 @@ export default function HomeClient() {
             onClick={addPerson}
             className="w-full py-3.5 rounded-2xl border-2 border-dashed border-border text-text-secondary hover:border-accent hover:text-accent transition-colors text-sm font-medium"
           >
-            + Add a person
+            + Add another person
           </button>
         )}
       </section>
@@ -192,7 +192,7 @@ export default function HomeClient() {
           disabled={loading}
           className="btn-lift w-full bg-accent text-white py-4 rounded-2xl text-base font-semibold transition-all hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
         >
-          {loading ? 'Working it out…' : 'Find somewhere fair'}
+          {loading ? 'Working it out…' : 'Find somewhere fair.'}
         </button>
       </section>
 

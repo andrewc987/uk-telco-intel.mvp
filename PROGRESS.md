@@ -30,6 +30,15 @@ Commits `037e803` (input), `0d7ba52` (engine), `32f54b4` (result) — merged to 
   - **Quickest: Oxford Circus** — diff sentence generated from actual numbers: "Quickest would save the group 7 minutes overall — but Ben's trip jumps to 41 minutes. Fairest keeps everyone within 36."
 - Haversine fabricator deleted; failed legs surface as `ok:false`, candidates with failures excluded from ranking.
 
+## Phases 4–5 — Venues + share/OG ✅ (deployed & live-verified)
+
+Commits `f4a731f` (venues), `9c9f6d6` (share/OG) — merged to `main`, deployed.
+
+**Live verification (production, this session):**
+- `/api/venues?lat=51.5137&lng=-0.1310` (Soho) returned real OSM venues: Royal George (Pub, 2 min), Waxy's Little Sister, Rupert Street, White Horse, The Flying Horse. Mock/fabricated venues deleted from the codebase.
+- `/api/og` → 200 `image/png` 1200×630; vision-checked the rendered card (wordmark, "MEET AT Westminster", per-person time pills Ana 33 / Ben 36 / Cam 32 / Dee 25, diff sentence). OG param format: repeated `p=Name|minutes`.
+- Share URL (`/?s=...`) returns 200 and re-runs the engine on open so results reproduce with fresh real times.
+
 ## Hand back to Andrew
 - `GOOGLE_MAPS_API_KEY` is not available in this execution container. Add it to the container env (or confirm it in Vercel Production env) to activate the Google provider. Tonight's build runs on TfL + postcodes.io (free, real journey times) behind the same provider interface — no fabricated times.
 - Vercel project rename off `uk-telco-intel-mvp` slug + domain/DNS — settings changes only Andrew can make.
