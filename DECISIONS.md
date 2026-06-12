@@ -40,5 +40,13 @@ The `?s=` base64 state still encodes the people (inputs), and now also a tiny re
 ## D12 — OG card: next/og ImageResponse, edge runtime, app palette
 `/api/og` renders the 1200×630 card with `next/og` — light #FAFAFA ground, HALF·POINT wordmark with the accent dot, big place name (scales down for long names), per-person time pills, diff sentence in secondary grey, system sans throughout. All content comes from query params; nothing is invented at render time.
 
+## D14 — Copy voice rules (Phase 7)
+Voice: dry, confident, blame-transferring — the app sides with whoever always gets the long journey, and gently takes the piss out of the person who picks somewhere convenient for themselves. Rules applied to every user-facing string:
+- Keep Andrew's lines verbatim: hero "The app that stops one person always winning.", sub-head "Multi-person. Multi-modal. Last-train-aware.", CTA "Find somewhere fair." (full stop included — it's a verdict, not a request). Secondary line "Find the fairest place to meet. Then blame the algorithm." used as the metadata description.
+- No "Oops", no exclamation marks, no emojis, no "Let's", no generic boilerplate ("Something went wrong!"). The test for every string: would this look AI-written? If yes, rewrite.
+- Errors are honest and name the failing party: "TfL couldn't plan Ben's leg. Not our doing." / "TfL isn't answering for most of these routes right now." Never a vague apology.
+- Don't overexplain mechanics — "Making sure nobody gets shafted" over a paragraph about minimax.
+- Share confirmation transfers the blame: "Copied. Their problem now."
+
 ## D13 — Share CTA: native share sheet first
 The result-screen CTA is full-width on mobile and calls `navigator.share` (title "Meet at {place}" + URL — the group-chat-native path on iOS/Android); where unavailable it copies to clipboard with a quiet "Copied. Send it in the group chat." confirmation. A dismissed share sheet is treated as a non-event, not an error.

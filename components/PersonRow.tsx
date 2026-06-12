@@ -135,7 +135,7 @@ export default function PersonRow({ person, index, onUpdate, onRemove, canRemove
           <input
             type="text"
             autoComplete="off"
-            placeholder="Heading home to (optional)"
+            placeholder="Home postcode or station"
             aria-label="Heading home to"
             value={person.homeLocation}
             onChange={(e) => {

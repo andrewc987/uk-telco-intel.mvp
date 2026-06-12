@@ -49,7 +49,7 @@ export default function ShareButton({ getShareUrl, placeName }: ShareButtonProps
         copied ? 'bg-success text-white' : 'bg-accent text-white hover:bg-accent/90'
       }`}
     >
-      {copied ? 'Copied. Send it in the group chat.' : 'Share the result'}
+      {copied ? 'Copied. Their problem now.' : 'Send it to the group chat'}
     </button>
   )
 }

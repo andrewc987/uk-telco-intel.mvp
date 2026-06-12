@@ -124,7 +124,7 @@ export async function optimise(
   if (scored.length < 3) {
     return {
       ok: false,
-      error: "Journey planning isn't answering for most of these routes right now. Try again in a minute.",
+      error: "TfL isn't answering for most of these routes right now. Give it a minute, then run it again.",
     }
   }
 

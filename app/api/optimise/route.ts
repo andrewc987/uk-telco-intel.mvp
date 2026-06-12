@@ -12,10 +12,10 @@ export async function POST(request: NextRequest) {
 
   const people = body.people || []
   if (people.length < 2) {
-    return NextResponse.json({ error: 'At least 2 people required' }, { status: 400 })
+    return NextResponse.json({ error: 'It takes at least two people to meet halfway.' }, { status: 400 })
   }
   if (people.length > 8) {
-    return NextResponse.json({ error: 'Maximum 8 people' }, { status: 400 })
+    return NextResponse.json({ error: "Eight people max. That's a meetup, not a festival." }, { status: 400 })
   }
 
   const enginePeople: EnginePerson[] = []

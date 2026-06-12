@@ -21,7 +21,7 @@ function JourneyLeg({ leg, index }: { leg: ScoredCandidate['legs'][number]; inde
         {leg.ok ? (
           <p className="text-sm text-text-secondary leading-relaxed">{leg.route}</p>
         ) : (
-          <p className="text-sm text-warning">Couldn&apos;t plan this leg — journey data didn&apos;t answer.</p>
+          <p className="text-sm text-warning">TfL couldn&apos;t plan {leg.personName}&apos;s leg. Not our doing.</p>
         )}
       </div>
       {leg.ok && (
