@@ -1,10 +1,15 @@
+export interface LatLng {
+  lat: number
+  lng: number
+}
+
 export interface Person {
   id: string
   name: string
   fromLocation: string
-  fromLatLng: { lat: number; lng: number } | null
+  fromLatLng: LatLng | null
   homeLocation: string
-  homeLatLng: { lat: number; lng: number } | null
+  homeLatLng: LatLng | null
   homePostcode: string
   londonTerminal?: Terminal
 }
@@ -22,40 +27,28 @@ export interface LastTrain {
   daysOfWeek: string[]
 }
 
-export interface Candidate {
-  stationName: string
+export type PersonLeg =
+  | { personId: string; personName: string; ok: true; minutes: number; route: string }
+  | { personId: string; personName: string; ok: false }
+
+export interface ScoredCandidate {
+  name: string
   postcode: string
   latLng: LatLng
-  scores: {
-    shortestTotal: number
-    fairest: number
-    fullJourneyFairness: number
-  }
-  journeys: PersonJourney[]
+  maxMinutes: number
+  spread: number
+  totalMinutes: number
+  legs: PersonLeg[]
 }
 
-export interface PersonJourney {
-  personId: string
-  personName: string
-  journeyToVenue: number
-  journeyHome: number
-  totalEvening: number
-  route: string
-  homeRoute: string
-  narrative: string
-  lastTrainWarning?: string
-  leaveByTime?: string
-}
-
-export interface Result {
-  recommended: Candidate
-  shortestTotalWinner: Candidate
-  fairestWinner: Candidate
-  fullJourneyWinner: Candidate
-  headline: string
-  summary: string
-  whyHere: string[]
-  venues: Venue[]
+export interface OptimiseResponse {
+  fairest: ScoredCandidate
+  quickest: ScoredCandidate
+  agree: boolean
+  diff: string
+  ranked: ScoredCandidate[]
+  origins: { personId: string; name: string; latLng: LatLng }[]
+  failures: { candidate: string; personName: string }[]
 }
 
 export interface Venue {
@@ -65,9 +58,4 @@ export interface Venue {
   address: string
   walkingMinutes: number
   googlePlacesId: string
-}
-
-export interface LatLng {
-  lat: number
-  lng: number
 }

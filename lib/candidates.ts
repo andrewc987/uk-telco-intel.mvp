@@ -7,6 +7,7 @@ export interface CandidateStation {
 }
 
 export const CANDIDATE_STATIONS: CandidateStation[] = [
+  { name: 'Angel', postcode: 'N1 8XB', latLng: { lat: 51.5322, lng: -0.1058 } },
   { name: 'Bank', postcode: 'EC3V 3LA', latLng: { lat: 51.5133, lng: -0.0886 } },
   { name: 'Barbican', postcode: 'EC1Y 8AF', latLng: { lat: 51.5204, lng: -0.0979 } },
   { name: 'Bermondsey', postcode: 'SE16 4JB', latLng: { lat: 51.4979, lng: -0.0637 } },
@@ -45,11 +46,16 @@ export const CANDIDATE_STATIONS: CandidateStation[] = [
   { name: "Shepherd's Bush", postcode: 'W12 8LQ', latLng: { lat: 51.5046, lng: -0.2187 } },
   { name: 'Shoreditch High Street', postcode: 'E1 6JE', latLng: { lat: 51.5234, lng: -0.0756 } },
   { name: 'Sloane Square', postcode: 'SW1W 8BB', latLng: { lat: 51.4924, lng: -0.1565 } },
-  { name: 'South Bank (Waterloo)', postcode: 'SE1 8SW', latLng: { lat: 51.5031, lng: -0.1132 } },
+  { name: 'Soho (Tottenham Court Road)', postcode: 'W1D 1BS', latLng: { lat: 51.5165, lng: -0.1308 } },
   { name: 'Southwark', postcode: 'SE1 0SU', latLng: { lat: 51.5036, lng: -0.1050 } },
   { name: "St Paul's", postcode: 'EC1A 4JA', latLng: { lat: 51.5152, lng: -0.0975 } },
   { name: 'Stratford', postcode: 'E15 1AZ', latLng: { lat: 51.5416, lng: -0.0033 } },
+  { name: 'Dalston Junction', postcode: 'E8 3DL', latLng: { lat: 51.5461, lng: -0.0750 } },
+  { name: 'Greenwich', postcode: 'SE10 9BL', latLng: { lat: 51.4781, lng: -0.0149 } },
+  { name: 'Notting Hill Gate', postcode: 'W11 3HT', latLng: { lat: 51.5091, lng: -0.1962 } },
+  { name: 'Peckham Rye', postcode: 'SE15 5DQ', latLng: { lat: 51.4701, lng: -0.0694 } },
   { name: 'Tooting', postcode: 'SW17 9NA', latLng: { lat: 51.4434, lng: -0.1688 } },
+  { name: 'Vauxhall', postcode: 'SW8 1SR', latLng: { lat: 51.4861, lng: -0.1253 } },
   { name: 'Tower Hill', postcode: 'EC3N 4DJ', latLng: { lat: 51.5101, lng: -0.0765 } },
   { name: 'Victoria', postcode: 'SW1V 1JU', latLng: { lat: 51.4952, lng: -0.1441 } },
   { name: 'Waterloo', postcode: 'SE1 8SW', latLng: { lat: 51.5031, lng: -0.1132 } },
