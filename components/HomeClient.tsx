@@ -27,7 +27,7 @@ function LoadingState() {
             key={line}
             className={`text-sm flex items-center gap-2 transition-opacity duration-500 ${
               i < stage
-                ? 'text-text-secondary/60'
+                ? 'text-text-secondary'
                 : i === stage
                   ? 'text-text-secondary'
                   : 'text-text-secondary/0 select-none'
@@ -208,7 +208,7 @@ export default function HomeClient() {
       {/* Error */}
       {error && (
         <section className="animate-fade-up mb-8">
-          <div className="bg-warning/8 border border-warning/20 rounded-xl px-4 py-3 text-center">
+          <div className="bg-warning/8 border border-warning/20 rounded-xl px-4 py-3 text-center" role="alert">
             <p className="text-sm text-warning font-medium">{error}</p>
           </div>
         </section>
@@ -226,7 +226,7 @@ export default function HomeClient() {
         </ResultView>
       )}
 
-      <footer className="text-center text-sm text-text-secondary/50 py-6 border-t border-border mt-10">
+      <footer className="text-center text-sm text-text-secondary py-6 border-t border-border mt-10">
         HALF·POINT — London, {new Date().getFullYear()}
       </footer>
     </main>

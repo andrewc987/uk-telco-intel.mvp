@@ -50,6 +50,9 @@ export default function ShareButton({ getShareUrl, placeName }: ShareButtonProps
       }`}
     >
       {copied ? 'Copied. Their problem now.' : 'Send it to the group chat'}
+      <span className="sr-only" role="status" aria-live="polite">
+        {copied ? 'Copied to clipboard' : ''}
+      </span>
     </button>
   )
 }
