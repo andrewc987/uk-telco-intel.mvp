@@ -1,12 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Person, Result } from '@/lib/types'
+import { Person, OptimiseResponse } from '@/lib/types'
 import PersonRow from '@/components/PersonRow'
-import ResultCard from '@/components/ResultCard'
-import JourneyCard from '@/components/JourneyCard'
-import WhyHere from '@/components/WhyHere'
-import VenueCard from '@/components/VenueCard'
 import ShareButton from '@/components/ShareButton'
 
 function createPerson(): Person {
@@ -35,7 +31,7 @@ function decodeState(encoded: string): ShareState | null {
 
 export default function HomePage() {
   const [people, setPeople] = useState<Person[]>([createPerson(), createPerson()])
-  const [result, setResult] = useState<Result | null>(null)
+  const [result, setResult] = useState<OptimiseResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -95,7 +91,7 @@ export default function HomePage() {
         return
       }
 
-      const data: Result = await res.json()
+      const data: OptimiseResponse = await res.json()
       setResult(data)
     } catch {
       setError("Couldn't find a fair spot. Try different locations.")
@@ -164,37 +160,30 @@ export default function HomePage() {
       {/* Results */}
       {result && (
         <div className="space-y-5">
-          <section>
-            <ResultCard result={result} />
+          <section className="text-center">
+            <h2 className="font-display text-3xl sm:text-4xl font-bold text-text-primary tracking-tight mb-3">
+              {result.fairest.name}
+            </h2>
+            <p className="text-base text-text-secondary max-w-md mx-auto">{result.diff}</p>
           </section>
 
-          <section>
-            <h3 className="text-sm font-semibold text-text-primary mb-3 animate-fade-up reveal-2">
-              The journey for everyone
-            </h3>
-            <div className="space-y-2.5">
-              {result.recommended.journeys.map((journey, i) => (
-                <JourneyCard key={journey.personId} journey={journey} index={i} />
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <WhyHere lines={result.whyHere} />
-          </section>
-
-          {result.venues.length > 0 && (
-            <section className="animate-fade-up reveal-4">
-              <h3 className="text-sm font-semibold text-text-primary mb-3">Nearby</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {result.venues.slice(0, 3).map((venue, i) => (
-                  <VenueCard key={venue.googlePlacesId} venue={venue} index={i} />
-                ))}
+          <section className="space-y-2.5">
+            {result.fairest.legs.map((leg) => (
+              <div key={leg.personId} className="bg-surface rounded-2xl shadow-card p-4 flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-text-primary">{leg.personName}</p>
+                  <p className="text-sm text-text-secondary">{leg.ok ? leg.route : "Couldn't plan this leg"}</p>
+                </div>
+                {leg.ok && (
+                  <span className="bg-accent text-white text-sm font-semibold px-3 py-0.5 rounded-full">
+                    {leg.minutes} min
+                  </span>
+                )}
               </div>
-            </section>
-          )}
+            ))}
+          </section>
 
-          <section className="animate-fade-up reveal-5 flex justify-center pt-4 pb-6">
+          <section className="flex justify-center pt-4 pb-6">
             <ShareButton getShareUrl={getShareUrl} />
           </section>
         </div>
