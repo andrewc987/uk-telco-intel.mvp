@@ -4,17 +4,15 @@ import { useState } from 'react'
 
 interface ShareButtonProps {
   getShareUrl: () => string
+  placeName?: string
 }
 
-export default function ShareButton({ getShareUrl }: ShareButtonProps) {
+export default function ShareButton({ getShareUrl, placeName }: ShareButtonProps) {
   const [copied, setCopied] = useState(false)
 
-  const handleCopy = async () => {
-    const url = getShareUrl()
+  const copy = async (url: string) => {
     try {
       await navigator.clipboard.writeText(url)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2500)
     } catch {
       const textarea = document.createElement('textarea')
       textarea.value = url
@@ -22,21 +20,36 @@ export default function ShareButton({ getShareUrl }: ShareButtonProps) {
       textarea.select()
       document.execCommand('copy')
       document.body.removeChild(textarea)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2500)
     }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2500)
+  }
+
+  const handleShare = async () => {
+    const url = getShareUrl()
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({
+          title: placeName ? `Meet at ${placeName}` : 'HALF·POINT',
+          url,
+        })
+        return
+      } catch (err) {
+        // User dismissed the sheet — do nothing. Anything else: copy instead.
+        if ((err as Error)?.name === 'AbortError') return
+      }
+    }
+    await copy(url)
   }
 
   return (
     <button
-      onClick={handleCopy}
-      className={`btn-lift px-6 py-3 rounded-full text-sm font-medium transition-all ${
-        copied
-          ? 'bg-success text-white'
-          : 'bg-accent text-white hover:bg-accent/90'
+      onClick={handleShare}
+      className={`btn-lift w-full sm:w-auto px-8 py-4 rounded-2xl text-base font-semibold transition-all shadow-sm ${
+        copied ? 'bg-success text-white' : 'bg-accent text-white hover:bg-accent/90'
       }`}
     >
-      {copied ? 'Copied. Send it in the group chat.' : 'Copy link'}
+      {copied ? 'Copied. Send it in the group chat.' : 'Share the result'}
     </button>
   )
 }
