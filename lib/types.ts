@@ -27,8 +27,18 @@ export interface LastTrain {
   daysOfWeek: string[]
 }
 
+// Last-train plan for someone heading home outside London: the static-table
+// departure plus a real TfL leg from the candidate to the terminal.
+export interface LastTrainPlan {
+  terminal: string
+  destination: string
+  trainTime: string // e.g. '23:42'
+  leaveBy: string // trainTime − real TfL candidate→terminal journey − 5 min buffer
+  toTerminalMinutes: number
+}
+
 export type PersonLeg =
-  | { personId: string; personName: string; ok: true; minutes: number; route: string }
+  | { personId: string; personName: string; ok: true; minutes: number; route: string; lastTrain?: LastTrainPlan }
   | { personId: string; personName: string; ok: false }
 
 export interface ScoredCandidate {

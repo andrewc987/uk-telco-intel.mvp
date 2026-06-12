@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { optimise, EnginePerson } from '@/lib/engine'
 import { Person } from '@/lib/types'
+import { getPostcodeOutward, lookupTerminal } from '@/lib/terminals'
+
+// "Heading home to" only becomes a last-train constraint when it resolves to a
+// known out-of-London terminal — i.e. the home field looks like a postcode
+// whose outward code is in the curated table. Londoners: nothing changes.
+function terminalForHome(p: Person) {
+  const raw = (p.homePostcode || p.homeLocation || '').toUpperCase().replace(/\s+/g, '')
+  if (!raw) return undefined
+  if (/^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/.test(raw)) return lookupTerminal(getPostcodeOutward(raw))
+  if (/^[A-Z]{1,2}\d{1,2}[A-Z]?$/.test(raw)) return lookupTerminal(raw)
+  return undefined
+}
 
 export async function POST(request: NextRequest) {
   let body: { people?: Person[] }
@@ -32,6 +44,7 @@ export async function POST(request: NextRequest) {
       name: p.name?.trim() || `Person ${i + 1}`,
       origin: p.fromLatLng,
       homeLatLng: p.homeLatLng || undefined,
+      terminal: terminalForHome(p),
     })
   }
 

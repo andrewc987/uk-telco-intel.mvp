@@ -1,4 +1,4 @@
-import { LatLng, OptimiseResponse, PersonLeg, ScoredCandidate } from './types'
+import { LastTrainPlan, LatLng, OptimiseResponse, PersonLeg, ScoredCandidate, Terminal } from './types'
 import { CANDIDATE_STATIONS, CandidateStation } from './candidates'
 import { tflJourneys } from './providers/tfl'
 
@@ -7,10 +7,37 @@ export interface EnginePerson {
   name: string
   origin: LatLng
   homeLatLng?: LatLng
+  terminal?: Terminal
 }
 
 const SHORTLIST_SIZE = 13
 const CONCURRENCY = 6
+// Last-train: only compute candidate→terminal legs for the shortlist's top
+// candidates after initial ranking (bounds the extra TfL calls), and drop a
+// candidate if it forces a leave-by more than this much earlier than the best.
+const TERMINAL_TOP_N = 6
+const LEAVE_BY_BUFFER_MIN = 5
+const LEAVE_BY_TOLERANCE_MIN = 20
+
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+function lastTrainToday(terminal: Terminal, date: Date) {
+  const day = DAY_NAMES[date.getDay()]
+  return terminal.lastTrains.find((t) => t.daysOfWeek.includes(day))
+}
+
+function parseHHMM(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  let mins = h * 60 + m
+  // 00:xx–02:xx departures belong to tonight's service, not this morning's.
+  if (mins < 180) mins += 1440
+  return mins
+}
+
+function formatHHMM(mins: number): string {
+  const m = ((mins % 1440) + 1440) % 1440
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+}
 
 function distSq(a: LatLng, b: LatLng): number {
   // Good enough for shortlisting at London scale; lng compressed for latitude.
@@ -133,8 +160,68 @@ export async function optimise(
   )
   const byQuickest = [...scored].sort((a, b) => a.totalMinutes - b.totalMinutes || a.maxMinutes - b.maxMinutes)
 
-  const fairest = byFairest[0]
-  const quickest = byQuickest[0]
+  // Last-train constraint: for anyone heading home outside London, compute the
+  // real TfL leg from each top candidate to their terminal, derive "leave the
+  // venue by", and drop candidates that force an unreasonably early exit.
+  const constrained = people
+    .map((p) => (p.terminal ? { person: p, terminal: p.terminal, train: lastTrainToday(p.terminal, departureTime) } : null))
+    .filter((c): c is { person: EnginePerson; terminal: Terminal; train: NonNullable<ReturnType<typeof lastTrainToday>> } =>
+      Boolean(c && c.train)
+    )
+
+  let pool = byFairest
+  if (constrained.length > 0) {
+    const considered = byFairest.slice(0, TERMINAL_TOP_N)
+    if (!considered.includes(byQuickest[0])) considered.push(byQuickest[0])
+
+    const terminalPairs = considered.flatMap((candidate) => constrained.map((c) => ({ candidate, c })))
+    const terminalLegs = await mapWithConcurrency(terminalPairs, CONCURRENCY, async ({ candidate, c }) => {
+      // A candidate that IS the terminal (e.g. meeting at Victoria, train from
+      // Victoria) is a real 0-minute leg — TfL refuses zero-length journeys.
+      const journey =
+        distSq(candidate.latLng, c.terminal.latLng) < 5e-6 // ~250 m
+          ? ({ ok: true, minutes: 0, route: '' } as const)
+          : await tflJourneys.journeyTime(candidate.latLng, c.terminal.latLng, departureTime)
+      return { candidate, c, journey }
+    })
+
+    // Per candidate: the earliest leave-by across constrained people (real legs only).
+    const leaveByMins = new Map<string, number>()
+    for (const { candidate, c, journey } of terminalLegs) {
+      if (!journey.ok) continue // honest: no invented terminal leg, no constraint from it
+      const leaveBy = parseHHMM(c.train.departureTime) - journey.minutes - LEAVE_BY_BUFFER_MIN
+      const current = leaveByMins.get(candidate.name)
+      leaveByMins.set(candidate.name, current === undefined ? leaveBy : Math.min(current, leaveBy))
+
+      // Surface it on the person's leg for this candidate — magic, not a warning.
+      const leg = candidate.legs.find((l) => l.personId === c.person.id)
+      if (leg?.ok) {
+        const plan: LastTrainPlan = {
+          terminal: c.terminal.name,
+          destination: c.train.destination,
+          trainTime: c.train.departureTime,
+          leaveBy: formatHHMM(leaveBy),
+          toTerminalMinutes: journey.minutes,
+        }
+        leg.lastTrain = plan
+      }
+    }
+
+    if (leaveByMins.size > 0) {
+      const bestLeaveBy = Math.max(...leaveByMins.values())
+      const kept = considered.filter((cand) => {
+        const lb = leaveByMins.get(cand.name)
+        return lb === undefined || lb >= bestLeaveBy - LEAVE_BY_TOLERANCE_MIN
+      })
+      if (kept.length > 0) pool = kept
+      else pool = considered
+    } else {
+      pool = considered
+    }
+  }
+
+  const fairest = pool.reduce((a, b) => (byFairest.indexOf(a) <= byFairest.indexOf(b) ? a : b))
+  const quickest = pool.reduce((a, b) => (byQuickest.indexOf(a) <= byQuickest.indexOf(b) ? a : b))
   const { agree, diff } = diffSentence(fairest, quickest)
 
   return {
@@ -144,7 +231,7 @@ export async function optimise(
       quickest,
       agree,
       diff,
-      ranked: byFairest.slice(0, 5),
+      ranked: pool.slice(0, 5),
       origins: people.map((p) => ({ personId: p.id, name: p.name, latLng: p.origin })),
       failures,
     },
