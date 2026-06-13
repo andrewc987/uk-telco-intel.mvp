@@ -94,6 +94,9 @@ export const placeSearch: PlaceSearchProvider = {
     const trimmed = query.trim()
     if (trimmed.length < 2) return []
 
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY
+    if (apiKey) return googlePlaceSearch(trimmed, apiKey)
+
     const postcodeFirst = POSTCODE_LIKE.test(trimmed)
     const [postcodes, stops] = await Promise.all([
       postcodeFirst ? searchPostcodes(trimmed) : Promise.resolve([] as PlaceSuggestion[]),
@@ -112,4 +115,59 @@ export const placeSearch: PlaceSearchProvider = {
     }
     return out
   },
+}
+
+async function googlePlaceSearch(query: string, apiKey: string): Promise<PlaceSuggestion[]> {
+  try {
+    // New Places Autocomplete (v1) — London-biased, transit-friendly.
+    const body = {
+      input: query,
+      locationBias: { circle: { center: { latitude: 51.5074, longitude: -0.1278 }, radius: 50000 } },
+      includedPrimaryTypes: ['locality', 'sublocality', 'neighborhood', 'transit_station',
+        'subway_station', 'train_station', 'light_rail_station', 'bus_station',
+        'point_of_interest', 'premise', 'street_address', 'postal_code'],
+      languageCode: 'en-GB',
+    }
+    const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    const suggestions = (data.suggestions || []) as Array<{
+      placePrediction?: { text?: { text?: string }; structuredFormat?: { mainText?: { text?: string }; secondaryText?: { text?: string } }; placeId?: string }
+    }>
+    // Resolve placeId → lat/lng in parallel (max 4 to stay cheap)
+    const top = suggestions.slice(0, 4)
+    const resolved = await Promise.all(
+      top.map(async (s) => {
+        const placeId = s.placePrediction?.placeId
+        const mainText = s.placePrediction?.structuredFormat?.mainText?.text || s.placePrediction?.text?.text || ''
+        const secondaryText = s.placePrediction?.structuredFormat?.secondaryText?.text || ''
+        if (!placeId || !mainText) return null
+        try {
+          const detail = await fetch(
+            `https://places.googleapis.com/v1/places/${placeId}?fields=location`,
+            { headers: { 'X-Goog-Api-Key': apiKey }, signal: AbortSignal.timeout(TIMEOUT_MS) }
+          )
+          if (!detail.ok) return null
+          const d = await detail.json()
+          if (!d.location) return null
+          return {
+            label: mainText,
+            sublabel: secondaryText || undefined,
+            latLng: { lat: d.location.latitude as number, lng: d.location.longitude as number },
+          } satisfies PlaceSuggestion
+        } catch { return null }
+      })
+    )
+    return resolved.filter((r): r is PlaceSuggestion => r !== null)
+  } catch {
+    return []
+  }
 }
