@@ -49,7 +49,13 @@ Commits `e897c4b` (copy), `7464af1` (last-train) — merged to `main`, deployed.
 - **Known flake:** on 4-person runs the terminal legs fire after ~60 anonymous TfL calls and can get rate-limited; the engine then honestly omits the constraint (never invents a time), so the last-train line can be missing under load. Direct TfL Westminster→Liverpool St verified fine (29 min) — it's throttling, not logic. Fix queued: retry/backoff on terminal legs; proper fix is a free `TFL_APP_KEY` (hand-back below).
 - Last-train table spot-checked against published timetables; two entries corrected (Paddington→Reading was wrong in the dangerous direction).
 
+## Phases 6+9 — Motion polish, a11y, robustness ✅ (deployed)
+Commits `2df6e4f`, `2403d29` + hardening `a1405a2`/follow-ups. WCAG-AA palette (measured ratios), WAI-ARIA combobox autocomplete with keyboard nav, staged result reveal with prefers-reduced-motion, corrupt `?s=` handled, OG fallback card, TfL cache confirmed (repeat query 6.1s → 0.013s). Bundle +0.8 kB, no new deps.
+
+## Known limitation — TfL anonymous rate limit from Vercel egress (BLOCKER, key fixes it)
+Diagnosed via the failures list on live: on 4-person runs, TfL hard-throttles Vercel's shared egress IP — late-run calls (including all candidate→terminal legs) fail even with 2 paced retries and after multi-minute cooldown, while the identical run from this container's IP succeeds fully (Liz: real 27-min Westminster→Liverpool St leg, "leave by 22:58"). Mitigations shipped: shortlist 13→10, terminal-leg retries (2.5s/6s), `maxDuration` 60, failures surfaced honestly — the app never invents a number; small groups work live (2-person last-train verified live: 23:30 train, leave by 23:12). **The fix is a free `TFL_APP_KEY` in Vercel env — the provider already sends it when present. No code change needed.**
+
 ## Hand back to Andrew
-- **Add a free `TFL_APP_KEY`** (api.tfl.gov.uk portal) to Vercel env — removes anonymous rate-limiting that can suppress the last-train line on big groups.
+- **Add a free `TFL_APP_KEY`** (register at api-portal.tfl.gov.uk) to Vercel Production env. This is the one blocker: it lifts the anonymous per-IP rate limit that currently suppresses some legs/last-train lines on larger groups on live. Everything is wired; redeploy not even required beyond the env change.
 - `GOOGLE_MAPS_API_KEY` is not available in this execution container. Add it to the container env (or confirm it in Vercel Production env) to activate the Google provider. Tonight's build runs on TfL + postcodes.io (free, real journey times) behind the same provider interface — no fabricated times.
 - Vercel project rename off `uk-telco-intel-mvp` slug + domain/DNS — settings changes only Andrew can make.
