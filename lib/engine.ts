@@ -10,7 +10,9 @@ export interface EnginePerson {
   terminal?: Terminal
 }
 
-const SHORTLIST_SIZE = 13
+// 10 keeps a 4-person run (~40 matrix calls + terminal legs) inside TfL's
+// anonymous per-IP budget on shared serverless egress; TFL_APP_KEY lifts it.
+const SHORTLIST_SIZE = 10
 const CONCURRENCY = 6
 // Last-train: only compute candidate→terminal legs for the shortlist's top
 // candidates after initial ranking (bounds the extra TfL calls), and drop a
