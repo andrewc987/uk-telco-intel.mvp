@@ -123,9 +123,6 @@ async function googlePlaceSearch(query: string, apiKey: string): Promise<PlaceSu
     const body = {
       input: query,
       locationBias: { circle: { center: { latitude: 51.5074, longitude: -0.1278 }, radius: 50000 } },
-      includedPrimaryTypes: ['locality', 'sublocality', 'neighborhood', 'transit_station',
-        'subway_station', 'train_station', 'light_rail_station', 'bus_station',
-        'point_of_interest', 'premise', 'street_address', 'postal_code'],
       languageCode: 'en-GB',
     }
     const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
