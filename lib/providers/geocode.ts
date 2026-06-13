@@ -166,7 +166,7 @@ async function googlePlaceSearch(query: string, apiKey: string): Promise<PlaceSu
         } catch { return null }
       })
     )
-    return resolved.filter((r): r is PlaceSuggestion => r !== null)
+    return resolved.filter((r): r is NonNullable<typeof r> => r !== null)
   } catch {
     return []
   }
