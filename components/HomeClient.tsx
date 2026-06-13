@@ -7,7 +7,7 @@ import ResultView from '@/components/ResultView'
 import ShareButton from '@/components/ShareButton'
 
 const LOADING_STAGES = [
-  'Pulling real journey times from TfL',
+  'Pulling real journey times across London',
   'Scoring every contender, both ways',
   'Making sure nobody gets shafted',
 ]
@@ -125,6 +125,13 @@ export default function HomeClient() {
 
   const runOptimise = async (group: Person[]) => {
     setError(null)
+
+    const unresolved = group.filter((p) => p.fromLocation.trim() && !p.fromLatLng)
+    if (unresolved.length > 0) {
+      const names = unresolved.map((p) => p.name || `Person ${group.indexOf(p) + 1}`)
+      setError(`${names.join(' and ')} ${names.length === 1 ? 'hasn\'t' : 'haven\'t'} confirmed a location — pick from the suggestions.`)
+      return
+    }
 
     const resolved = group.filter((p) => p.fromLatLng)
     if (resolved.length < 2) {
