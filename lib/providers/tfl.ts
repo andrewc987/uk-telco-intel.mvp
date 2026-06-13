@@ -92,7 +92,7 @@ async function queryGoogleRoutes(
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'routes.duration,routes.legs.steps.transitDetails,routes.legs.steps.travelMode,routes.legs.steps.staticDuration',
+        'X-Goog-FieldMask': 'routes.duration,routes.legs.steps.transitDetails,routes.legs.steps.travelMode,routes.legs.steps.staticDuration,routes.legs.steps.localizedValues',
       },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -116,9 +116,42 @@ interface GoogleStep {
   travelMode?: string
   staticDuration?: string
   transitDetails?: {
-    transitLine?: { name?: string; vehicle?: { type?: string } }
+    transitLine?: { name?: string; nameShort?: string; vehicle?: { type?: string } }
     stopCount?: number
   }
+}
+
+// Maps Google vehicle types to human labels
+const VEHICLE_LABELS: Record<string, string> = {
+  SUBWAY: 'Tube',
+  HEAVY_RAIL: 'Train',
+  COMMUTER_TRAIN: 'Train',
+  HIGH_SPEED_TRAIN: 'Train',
+  LIGHT_RAIL: 'Light rail',
+  TRAM: 'Tram',
+  MONORAIL: 'Monorail',
+  BUS: 'Bus',
+  INTERCITY_BUS: 'Bus',
+  TROLLEYBUS: 'Bus',
+  SHARE_TAXI: 'Taxi',
+  FERRY: 'Ferry',
+  CABLE_CAR: 'Cable car',
+  GONDOLA_LIFT: 'Cable car',
+  FUNICULAR: 'Funicular',
+  OTHER: '',
+}
+
+function cleanTransitName(name: string | undefined, nameShort: string | undefined, vehicleType: string | undefined): string | null {
+  // Prefer short name (e.g. "Northern" over "Northern line"), then full name
+  const raw = nameShort || name
+  if (!raw) return VEHICLE_LABELS[vehicleType || ''] || null
+  // "London Buses Route 24" → "24 bus"
+  const busRoute = raw.match(/(?:London Buses? Route |Bus Route )(\w+)/i)
+  if (busRoute) return `${busRoute[1]} bus`
+  // "24" with vehicleType BUS → "24 bus"
+  if ((vehicleType === 'BUS' || vehicleType === 'INTERCITY_BUS') && /^\w{1,4}$/.test(raw)) return `${raw} bus`
+  // Strip trailing " line" if present — keep "Northern", not "Northern line"
+  return raw.replace(/ line$/i, '')
 }
 
 function summariseGoogleRoute(steps: GoogleStep[]): string {
@@ -129,10 +162,9 @@ function summariseGoogleRoute(steps: GoogleStep[]): string {
       const mins = Math.round(secs / 60)
       if (mins >= 2) parts.push(`${mins}-min walk`)
     } else if (step.travelMode === 'TRANSIT') {
-      const name = step.transitDetails?.transitLine?.name
-      const type = step.transitDetails?.transitLine?.vehicle?.type
-      if (name) parts.push(name)
-      else if (type) parts.push(type.charAt(0) + type.slice(1).toLowerCase())
+      const tl = step.transitDetails?.transitLine
+      const label = cleanTransitName(tl?.name, tl?.nameShort, tl?.vehicle?.type)
+      if (label) parts.push(label)
     }
   }
   const deduped = parts.filter((p, i, a) => i === 0 || p !== a[i - 1])
