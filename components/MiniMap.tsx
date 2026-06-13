@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { LatLng } from '@/lib/types'
 
 interface MiniMapProps {
@@ -7,20 +8,71 @@ interface MiniMapProps {
   destination: { name: string; latLng: LatLng }
 }
 
+// Build the /api/staticmap URL for a Google Static Map with origin + destination markers
+function buildStaticMapUrl(origins: { name: string; latLng: LatLng }[], destination: { name: string; latLng: LatLng }) {
+  const center = `${destination.latLng.lat},${destination.latLng.lng}`
+  // Auto-fit zoom: find rough span
+  const lats = [...origins.map((o) => o.latLng.lat), destination.latLng.lat]
+  const lngs = [...origins.map((o) => o.latLng.lng), destination.latLng.lng]
+  const span = Math.max(Math.max(...lats) - Math.min(...lats), Math.max(...lngs) - Math.min(...lngs))
+  const zoom = span < 0.02 ? 14 : span < 0.06 ? 13 : span < 0.15 ? 12 : 11
+
+  const params = new URLSearchParams({ center, zoom: String(zoom) })
+  // Destination: blue filled circle
+  params.append('m', `color:0x0066CC|size:mid|label:★|${destination.latLng.lat},${destination.latLng.lng}`)
+  // Origins: grey dots
+  for (const o of origins) {
+    params.append('m', `color:0x6E6E73|size:small|${o.latLng.lat},${o.latLng.lng}`)
+  }
+  return `/api/staticmap?${params.toString()}`
+}
+
+export default function MiniMap({ origins, destination }: MiniMapProps) {
+  const [useGoogleMap, setUseGoogleMap] = useState<boolean | null>(null) // null = loading
+  const staticMapUrl = buildStaticMapUrl(origins, destination)
+
+  useEffect(() => {
+    // Probe whether the static map proxy has a key
+    fetch(staticMapUrl, { method: 'HEAD' })
+      .then((r) => setUseGoogleMap(r.ok && r.status !== 204))
+      .catch(() => setUseGoogleMap(false))
+  }, [staticMapUrl])
+
+  if (useGoogleMap === null) {
+    // Brief skeleton while probing
+    return <div className="w-full rounded-2xl bg-surface shadow-card" style={{ aspectRatio: '640/300' }} />
+  }
+
+  if (useGoogleMap) {
+    return (
+      <div className="w-full rounded-2xl shadow-card overflow-hidden" style={{ aspectRatio: '640/300' }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={staticMapUrl}
+          alt={`Map: everyone converging on ${destination.name}`}
+          className="w-full h-full object-cover"
+          loading="lazy"
+        />
+      </div>
+    )
+  }
+
+  // SVG minimap fallback (no key / key absent)
+  return <SvgMiniMap origins={origins} destination={destination} />
+}
+
 const W = 320
 const H = 190
 const PAD_X = 34
 const PAD_Y = 30
 
-export default function MiniMap({ origins, destination }: MiniMapProps) {
+function SvgMiniMap({ origins, destination }: MiniMapProps) {
   const points = [...origins.map((o) => o.latLng), destination.latLng]
   const minLat = Math.min(...points.map((p) => p.lat))
   const maxLat = Math.max(...points.map((p) => p.lat))
   const minLng = Math.min(...points.map((p) => p.lng))
   const maxLng = Math.max(...points.map((p) => p.lng))
 
-  // Uniform scale with a cos(lat) correction so geometry isn't squashed,
-  // and a minimum span so a tight two-person group doesn't zoom to nothing.
   const midLat = (minLat + maxLat) / 2
   const lngFactor = Math.cos((midLat * Math.PI) / 180)
   const latSpan = Math.max(maxLat - minLat, 0.02)
@@ -35,8 +87,6 @@ export default function MiniMap({ origins, destination }: MiniMapProps) {
   const dx = x(destination.latLng)
   const dy = y(destination.latLng)
 
-  // Label placement with collision basics: labels default above the dot,
-  // flip below when they'd sit on top of an earlier label or the winner's.
   const clampX = (v: number) => Math.min(Math.max(v, 26), W - 26)
   const placed: { x: number; y: number }[] = [{ x: clampX(dx), y: dy + 18 }]
   const originLabels = origins.map((o) => {
@@ -60,51 +110,24 @@ export default function MiniMap({ origins, destination }: MiniMapProps) {
       className="w-full h-auto rounded-2xl bg-surface shadow-card"
     >
       {originLabels.map((o, i) => (
-        <line
-          key={`l-${i}`}
-          className="map-fade"
-          style={{ animationDelay: `${250 + i * 110}ms` }}
-          x1={o.ox}
-          y1={o.oy}
-          x2={dx}
-          y2={dy}
-          stroke="#DBDBDE"
-          strokeWidth={1.5}
-          strokeDasharray="3 4"
-          strokeLinecap="round"
-        />
+        <line key={`l-${i}`} className="map-fade" style={{ animationDelay: `${250 + i * 110}ms` }}
+          x1={o.ox} y1={o.oy} x2={dx} y2={dy}
+          stroke="#DBDBDE" strokeWidth={1.5} strokeDasharray="3 4" strokeLinecap="round" />
       ))}
       {originLabels.map((o, i) => (
         <g key={`o-${i}`} className="map-fade" style={{ animationDelay: `${120 + i * 110}ms` }}>
           <circle cx={o.ox} cy={o.oy} r={4.5} fill="#6E6E73" />
           <circle cx={o.ox} cy={o.oy} r={4.5} fill="none" stroke="#FFFFFF" strokeWidth={1.25} />
-          <text
-            x={o.lx}
-            y={o.ly}
-            textAnchor="middle"
-            fontSize={9.5}
-            fill="#6E6E73"
-            fontFamily="-apple-system, system-ui, sans-serif"
-          >
-            {o.name}
-          </text>
+          <text x={o.lx} y={o.ly} textAnchor="middle" fontSize={9.5} fill="#6E6E73"
+            fontFamily="-apple-system, system-ui, sans-serif">{o.name}</text>
         </g>
       ))}
       <g className="map-winner" style={{ animationDelay: `${360 + origins.length * 110}ms` }}>
         <circle cx={dx} cy={dy} r={11} fill="#0066CC" opacity={0.12} />
         <circle cx={dx} cy={dy} r={7} fill="#0066CC" opacity={0.18} />
         <circle cx={dx} cy={dy} r={5.5} fill="#0066CC" stroke="#FFFFFF" strokeWidth={1.5} />
-        <text
-          x={clampX(dx)}
-          y={dy + 19}
-          textAnchor="middle"
-          fontSize={10.5}
-          fontWeight={600}
-          fill="#1D1D1F"
-          fontFamily="-apple-system, system-ui, sans-serif"
-        >
-          {destination.name}
-        </text>
+        <text x={clampX(dx)} y={dy + 19} textAnchor="middle" fontSize={10.5} fontWeight={600}
+          fill="#1D1D1F" fontFamily="-apple-system, system-ui, sans-serif">{destination.name}</text>
       </g>
     </svg>
   )
