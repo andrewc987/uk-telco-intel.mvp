@@ -62,10 +62,83 @@ export const tflJourneys: JourneyProvider = {
     const hit = cache.get(key)
     if (hit) return hit
 
-    const result = await queryTfL(origin, dest, departureTime)
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY
+    const result = apiKey
+      ? await queryGoogleRoutes(origin, dest, departureTime, apiKey)
+      : await queryTfL(origin, dest, departureTime)
+
     cache.set(key, result)
     return result
   },
+}
+
+async function queryGoogleRoutes(
+  origin: LatLng,
+  dest: LatLng,
+  departureTime: Date,
+  apiKey: string
+): Promise<JourneyResult> {
+  try {
+    const body = {
+      origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
+      destination: { location: { latLng: { latitude: dest.lat, longitude: dest.lng } } },
+      travelMode: 'TRANSIT',
+      departureTime: departureTime.toISOString(),
+      computeAlternativeRoutes: false,
+      transitPreferences: { routingPreference: 'LESS_WALKING' },
+    }
+    const res = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'routes.duration,routes.legs.steps.transitDetails,routes.legs.steps.travelMode,routes.legs.steps.staticDuration',
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+    if (!res.ok) return { ok: false }
+    const data = await res.json()
+    const routes = data.routes || []
+    if (routes.length === 0) return { ok: false }
+    const route = routes[0]
+    const durationSecs = parseInt(route.duration?.replace('s', '') || '0', 10)
+    if (!durationSecs) return { ok: false }
+    const minutes = Math.round(durationSecs / 60)
+    const route_summary = summariseGoogleRoute(route.legs?.[0]?.steps || [])
+    return { ok: true, minutes, route: route_summary }
+  } catch {
+    return { ok: false }
+  }
+}
+
+interface GoogleStep {
+  travelMode?: string
+  staticDuration?: string
+  transitDetails?: {
+    transitLine?: { name?: string; vehicle?: { type?: string } }
+    stopCount?: number
+  }
+}
+
+function summariseGoogleRoute(steps: GoogleStep[]): string {
+  const parts: string[] = []
+  for (const step of steps) {
+    if (step.travelMode === 'WALK') {
+      const secs = parseInt(step.staticDuration?.replace('s', '') || '0', 10)
+      const mins = Math.round(secs / 60)
+      if (mins >= 2) parts.push(`${mins}-min walk`)
+    } else if (step.travelMode === 'TRANSIT') {
+      const name = step.transitDetails?.transitLine?.name
+      const type = step.transitDetails?.transitLine?.vehicle?.type
+      if (name) parts.push(name)
+      else if (type) parts.push(type.charAt(0) + type.slice(1).toLowerCase())
+    }
+  }
+  const deduped = parts.filter((p, i, a) => i === 0 || p !== a[i - 1])
+  if (deduped.length === 0) return 'Short walk'
+  if (deduped.length === 1) return deduped[0]
+  return `${deduped.slice(0, -1).join(', ')} then ${deduped[deduped.length - 1]}`
 }
 
 async function queryTfL(origin: LatLng, dest: LatLng, departureTime: Date): Promise<JourneyResult> {
