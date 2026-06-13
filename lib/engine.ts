@@ -169,6 +169,12 @@ export async function optimise(
       Boolean(c && c.train)
     )
 
+  for (const p of people) {
+    if (p.terminal && !constrained.some((c) => c.person.id === p.id)) {
+      failures.push({ candidate: `${p.terminal.name} (no last-train entry today)`, personName: p.name })
+    }
+  }
+
   let pool = byFairest
   if (constrained.length > 0) {
     const considered = byFairest.slice(0, TERMINAL_TOP_N)
@@ -189,6 +195,9 @@ export async function optimise(
         if (journey.ok) break
         await new Promise((r) => setTimeout(r, delay))
         journey = await tflJourneys.journeyTime(candidate.latLng, c.terminal.latLng, departureTime)
+      }
+      if (!journey.ok) {
+        failures.push({ candidate: `${candidate.name} → ${c.terminal.name} (terminal leg)`, personName: c.person.name })
       }
       return { candidate, c, journey }
     })
