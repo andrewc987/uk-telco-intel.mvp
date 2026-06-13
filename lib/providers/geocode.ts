@@ -137,7 +137,10 @@ async function googlePlaceSearch(query: string, apiKey: string): Promise<PlaceSu
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     })
-    if (!res.ok) return []
+    if (!res.ok) {
+      console.error('[google-places] autocomplete error', res.status, await res.text().catch(() => ''))
+      return []
+    }
     const data = await res.json()
     const suggestions = (data.suggestions || []) as Array<{
       placePrediction?: { text?: { text?: string }; structuredFormat?: { mainText?: { text?: string }; secondaryText?: { text?: string } }; placeId?: string }
@@ -167,7 +170,8 @@ async function googlePlaceSearch(query: string, apiKey: string): Promise<PlaceSu
       })
     )
     return resolved.filter((r): r is NonNullable<typeof r> => r !== null)
-  } catch {
+  } catch (e) {
+    console.error('[google-places] exception', e)
     return []
   }
 }
