@@ -164,8 +164,10 @@ export default function PersonRow({ person, index, onUpdate, onRemove, canRemove
   const from = useSuggestions()
   const home = useSuggestions()
 
+  const needsConfirm = Boolean(person.fromLocation.trim() && !person.fromLatLng)
+
   return (
-    <div className="bg-surface rounded-2xl shadow-card p-4 sm:p-5">
+    <div className={`bg-surface rounded-2xl shadow-card p-4 sm:p-5 transition-shadow ${needsConfirm ? 'ring-1 ring-warning/50' : ''}`}>
       <div className="flex items-center gap-3 mb-3">
         <input
           type="text"
@@ -205,7 +207,7 @@ export default function PersonRow({ person, index, onUpdate, onRemove, canRemove
           onClick={() => setShowHome(true)}
           className="mt-2.5 text-sm text-text-secondary hover:text-accent transition-colors"
         >
-          + heading home to somewhere else
+          + heading home somewhere different?
         </button>
       ) : (
         <div className="mt-2.5">
