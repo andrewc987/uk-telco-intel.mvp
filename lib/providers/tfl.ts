@@ -92,7 +92,7 @@ async function queryGoogleRoutes(
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'routes.duration,routes.legs.steps.transitDetails,routes.legs.steps.travelMode,routes.legs.steps.staticDuration,routes.legs.steps.localizedValues',
+        'X-Goog-FieldMask': 'routes.duration,routes.legs.steps.travelMode,routes.legs.steps.staticDuration,routes.legs.steps.transitDetails.transitLine,routes.legs.steps.transitDetails.stopCount',
       },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -142,15 +142,23 @@ const VEHICLE_LABELS: Record<string, string> = {
 }
 
 function cleanTransitName(name: string | undefined, nameShort: string | undefined, vehicleType: string | undefined): string | null {
-  // Prefer short name (e.g. "Northern" over "Northern line"), then full name
+  const vLabel = VEHICLE_LABELS[vehicleType || ''] || null
+
+  // Prefer short name; fall back to full name
   const raw = nameShort || name
-  if (!raw) return VEHICLE_LABELS[vehicleType || ''] || null
-  // "London Buses Route 24" → "24 bus"
-  const busRoute = raw.match(/(?:London Buses? Route |Bus Route )(\w+)/i)
+  if (!raw) return vLabel
+
+  // Raw looks like an enum value (underscore, all-caps) — use vehicle label instead
+  if (/_/.test(raw) || raw === raw.toUpperCase()) return vLabel
+
+  // "London Buses Route 24" / "Bus Route N21" → "24 bus"
+  const busRoute = raw.match(/(?:London Buses? Route |Bus Route )(\S+)/i)
   if (busRoute) return `${busRoute[1]} bus`
-  // "24" with vehicleType BUS → "24 bus"
+
+  // Short numeric/alpha code with BUS type → "24 bus"
   if ((vehicleType === 'BUS' || vehicleType === 'INTERCITY_BUS') && /^\w{1,4}$/.test(raw)) return `${raw} bus`
-  // Strip trailing " line" if present — keep "Northern", not "Northern line"
+
+  // Strip trailing " line" — keep "Northern", not "Northern line"
   return raw.replace(/ line$/i, '')
 }
 
